@@ -1,9 +1,28 @@
 <?php
 
+use App\Shared\Logging\RedactSensitiveDataProcessor;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
+
+/*
+| Structured JSON logging (ARCHITECTURE.md §10.1 / ADR-016 / SECURITY.md §17).
+| Every JSON channel writes one JSON object per line and passes through the
+| RedactSensitiveDataProcessor. The request id is attached automatically via
+| Laravel's Context (see App\Shared\Http\Middleware\RequestId).
+*/
+$jsonChannel = static fn (string $level = 'debug'): array => [
+    'driver' => 'monolog',
+    'level' => env('LOG_LEVEL', $level),
+    'handler' => StreamHandler::class,
+    'handler_with' => [
+        'stream' => env('LOG_JSON_STREAM', 'php://stderr'),
+    ],
+    'formatter' => JsonFormatter::class,
+    'processors' => [PsrLogMessageProcessor::class, RedactSensitiveDataProcessor::class],
+];
 
 return [
 
@@ -63,6 +82,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'processors' => [RedactSensitiveDataProcessor::class],
         ],
 
         'daily' => [
@@ -101,6 +121,17 @@ return [
             ],
             'processors' => [PsrLogMessageProcessor::class],
         ],
+
+        'json' => $jsonChannel(),
+
+        // Dedicated channels (ADR-016): Log::channel('payments')->info(...)
+        'payments' => $jsonChannel('info'),
+
+        'shipping' => $jsonChannel('info'),
+
+        'security' => $jsonChannel('info'),
+
+        'notifications' => $jsonChannel('info'),
 
         'stderr' => [
             'driver' => 'monolog',

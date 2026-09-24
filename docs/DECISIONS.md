@@ -364,3 +364,25 @@ adicionais: `recuperar-senha`, `redefinir-senha`, `institucional`, `admin`, `api
 papéis). Somente `super-admin` administra usuários e papéis. `prices.manage`
 (preço base/faixas da variante) e `pricing.manage` (tabelas de preço, preços por
 cliente, atribuição de tabela) coexistem.
+
+## ADR-028 — API.md é o contrato canônico
+
+Após a revisão de API.md §8.2:
+
+- **Contrato HTTP:** `API.md` prevalece sobre ARCHITECTURE/SECURITY/SHIPPING/UX
+  para paths, payloads, códigos de erro, nomes de permissões e query params.
+- **`price_source`:** valores de DATABASE.md (`base`, `tier`, `price_list`,
+  `variant_promo`, `promotion`, `customer_price`).
+- **Permissões:** lista de API.md (ADR-023 + extras do seed de DATABASE.md).
+- **Idempotência:** código `idempotency_conflict` (não `idempotency_key_reused`).
+- **Cupom:** inválido ao aplicar no carrinho → 422; inválido/expirado no checkout →
+  409 `coupon_invalid`.
+- **Cancelamento de pedido pago:** cancela e estorna de forma assíncrona com retry
+  (`payment_refunds`); falha de estorno fica visível ao financeiro.
+- **Seed é a referência numérica:** exemplos de BUSINESS_RULES §9 são ilustrativos.
+  A promoção "Semana do Vinil" do seed **não** pode afetar
+  `vinil-adesivo-branco-122m`, que deve sair a R$ 15,90/m (fluxo de aceite:
+  5 m = R$ 79,50).
+- **Colunas adicionadas:** `customer_addresses.uuid` (rotas do cliente usam uuid),
+  `cart_items.last_seen_unit_price_cents` (aviso de preço alterado),
+  `products.specifications jsonb` (tabela de especificações técnicas).

@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
-
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+/*
+| Scheduled tasks and artisan commands are declared by each module's
+| ServiceProvider (`schedule()` and `$commands`, see
+| App\Shared\Providers\ModuleServiceProvider). Keep this file for app-wide
+| commands only.
+*/
