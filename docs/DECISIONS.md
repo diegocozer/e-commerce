@@ -242,3 +242,118 @@ recurso do cliente (IDOR). IDs públicos de pedido: `orders.number` (ex.: `CV-00
 - Agentes **não** fazem commit; o coordenador integra e commita ao fim de cada etapa.
 - Testes de backend usam Postgres; cada agente usa seu próprio banco de teste quando
   indicado (`DB_DATABASE=ecommerce_test_<agente>`).
+
+---
+
+# Rodada 2 — Resoluções do coordenador após o planejamento
+
+Decisões abaixo resolvem as questões levantadas em BUSINESS_RULES.md (Q-01…Q-16),
+ARCHITECTURE.md §12.2 (P1…P13), SHIPPING.md §5.1.1 e DATABASE.md §9. Em caso de
+conflito entre documentos, **esta seção prevalece**.
+
+## ADR-018 — Módulos finais
+
+`Shared` (kernel: Money, Quantity, Dimensions, Weight, AuditLogger, RequestId),
+`Settings`, `Identity`, `Audit`, `Customers`, `Inventory`, `Pricing` (inclui
+promoções, cupons, tabelas de preço), `Catalog`, `Shipping`, `Payments`, `Cart`,
+`Orders`, `Checkout` (orquestrador, sem tabelas), `Notifications`, `Reports`, `Seo`.
+Grafo de dependências conforme ARCHITECTURE.md (sem ciclos). Verificação por
+**teste de arquitetura em PHPUnit** (varre `use` statements dos módulos) em vez de
+deptrac no MVP.
+
+## ADR-019 — Área e quantidade (corrige ADR-003/004)
+
+- Área por peça em milésimos de m² = `round_half_up(width_mm × height_mm / 1000)`.
+- Área mínima faturável aplica-se **por peça**:
+  `billable_area = max(piece_area, min_billable_area) × pieces`.
+- `SQUARE_METER`: `cart_items.quantity` é NULL; `width_mm`, `height_mm`, `pieces`
+  obrigatórios; `min/max_quantity` e `quantity_step` referem-se a **peças**.
+- `order_items.billable_quantity` (faturado) separado de `stock_quantity` (baixa de
+  estoque, sem área mínima).
+- Faixas de preço (`price_tiers`) usam a **soma da quantidade da variante no
+  carrinho** (todas as linhas da mesma variante).
+
+## ADR-020 — Erros com código de máquina
+
+Respostas ≠ 422 incluem `{"message": "...", "code": "snake_case"}`. Códigos
+mínimos: `insufficient_stock`, `price_changed`, `shipping_quote_expired`,
+`shipping_option_unavailable`, `coupon_invalid`, `idempotency_conflict`,
+`payment_gateway_unavailable`, `invalid_status_transition`, `cart_empty`,
+`too_many_pending_orders`, `forbidden`, `not_found`, `unauthenticated`,
+`too_many_requests`.
+
+## ADR-021 — Checkout (complementa ADR-009)
+
+- `orders.checkout_fingerprint` (hash do corpo relevante). Mesma `Idempotency-Key`
+  com corpo diferente → 409 `idempotency_conflict`.
+- Cliente envia `expected_total_cents` **apenas para comparação**; se o total
+  recalculado divergir → 409 `price_changed` com o novo resumo.
+- Falha do gateway ao criar o pagamento → pedido permanece `pending_payment`,
+  resposta 503 `payment_gateway_unavailable`; o cliente pode repetir com a mesma
+  chave (gera o pagamento que faltou) ou via `POST /me/orders/{uuid}/payment`.
+- Gateway **nunca** é chamado dentro de transação de banco.
+- Máximo de 3 pedidos `pending_payment` simultâneos por cliente (409
+  `too_many_pending_orders`).
+- Uso de cupom registrado na criação do pedido; liberado se o pedido for cancelado
+  antes do pagamento.
+- Cliente só cancela pedidos `pending_payment`; demais cancelamentos são do admin.
+
+## ADR-022 — Webhooks e pagamentos (complementa ADR-009/010)
+
+- Fluxo: validar assinatura (`PaymentWebhookVerifier`) → gravar `webhook_events`
+  (dedupe por `provider+external_id`, somente eventos com assinatura válida) →
+  responder 200 → processar na fila `webhooks` consultando `getPayment()` no gateway
+  (fonte da verdade).
+- Job de reconciliação a cada 5 min para pagamentos pendentes (webhook perdido).
+- **Pagamento aprovado após expiração/cancelamento por expiração:** se houver
+  estoque, o pedido é reativado (`cancelled → paid`, transição exclusiva do
+  sistema, registrada no histórico); caso contrário, estorno automático e
+  notificação.
+- Expiração por método configurável em `settings` (PIX padrão 30 min).
+
+## ADR-023 — Sessão e papéis administrativos
+
+- Um cookie de sessão; guards `customer` e `admin`. Sessão admin: timeout por
+  inatividade 30 min, limite absoluto 8 h.
+- Papéis (seed), código em inglês + nome pt-BR:
+  `super-admin` (Super Admin — todas as permissões, via Gate::before),
+  `manager` (Gerente), `seller` (Vendedor), `warehouse` (Estoque/Expedição),
+  `finance` (Financeiro). A matriz de permissões de BUSINESS_RULES.md vale,
+  acrescida de `pricing.manage`, `inventory.view`, `customers.update`,
+  `reports.export`.
+- Permissões nomeadas `<resource>.<action>`; listeners registrados explicitamente
+  (sem auto-discovery).
+
+## ADR-024 — Conteúdo rico e sanitização
+
+Descrições de produto/categoria aceitam HTML limitado (p, br, strong, em, ul, ol,
+li, h2, h3, a[href], table básica), sanitizado no backend com
+`ezyang/htmlpurifier` e no frontend com DOMPurify antes de renderizar. Todo o resto
+é texto puro.
+
+## ADR-025 — Frete (reconcilia SHIPPING.md × DATABASE.md)
+
+SHIPPING.md §5.1.1 é aceito integralmente e DATABASE.md já foi alinhado:
+`min/max_subtotal_cents`, `max_package_length_cm`, `per_kg_cents`,
+`price_type ∈ {fixed, per_kg, fixed_plus_per_kg, percentage_of_subtotal, free}`,
+`valid_from/valid_until`, regras só para `own_delivery`/`table_rate`,
+ordem: prioridade ASC → especificidade (CEP > cidade > UF > global) → id; primeira
+regra que casa vence (uma opção por método). `per_kg` cobra por kg iniciado.
+Estimativa de prazo em dias úteis considerando apenas fins de semana no MVP
+(feriados: evolução).
+
+## ADR-026 — Escopo adiado (documentado, fora do MVP)
+
+`url_redirects` (redirecionamento de slug), exportação LGPD self-service,
+devolução pós-entrega (registrada manualmente pelo admin), feriados no prazo,
+Horizon, deptrac, S3 adapter instalado (config pronta; em dev usa disco `public`),
+múltiplos usuários por empresa, pagamento faturado/cartão/boleto (interfaces
+prontas).
+
+## ADR-026a — Incluídos no MVP a partir das revisões
+
+`orders.checkout_fingerprint`; índice parcial garantindo um estorno ativo por
+pagamento; trigger que impede UPDATE/DELETE em `audit_logs`; slugs reservados
+adicionais: `recuperar-senha`, `redefinir-senha`, `institucional`, `admin`, `api`,
+`sanctum`, `sitemap.xml`, `robots.txt`; validação de CNPJ alfanumérico; CI com
+`composer audit`, `npm audit --audit-level=high` e Dependabot.
