@@ -357,3 +357,10 @@ pagamento; trigger que impede UPDATE/DELETE em `audit_logs`; slugs reservados
 adicionais: `recuperar-senha`, `redefinir-senha`, `institucional`, `admin`, `api`,
 `sanctum`, `sitemap.xml`, `robots.txt`; validação de CNPJ alfanumérico; CI com
 `composer audit`, `npm audit --audit-level=high` e Dependabot.
+
+## ADR-027 — Ajuste de papéis
+
+`manager` recebe todas as permissões **exceto** `admin_users.manage` (e gestão de
+papéis). Somente `super-admin` administra usuários e papéis. `prices.manage`
+(preço base/faixas da variante) e `pricing.manage` (tabelas de preço, preços por
+cliente, atribuição de tabela) coexistem.
