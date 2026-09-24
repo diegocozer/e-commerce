@@ -71,7 +71,7 @@ na ordem inversa.
 | 11 | shipping | `ibge_cities`, `shipping_carriers`, `shipping_methods`, `shipping_zones`, `shipping_zone_postal_ranges`, `shipping_zone_cities`, `shipping_zone_states`, `shipping_rules` |
 | 12 | orders | sequência `order_number_seq`, `orders`, `order_items`, `order_status_history`, `coupon_redemptions` |
 | 13 | cart | `carts`, `cart_items`, `shipping_quotes` |
-| 14 | payments | `payments`, `payment_transactions`, `webhook_events` |
+| 14 | payments | `payments`, `webhook_events`, `payment_transactions`, `payment_refunds` |
 | 15 | cross_cutting | `audit_logs`, `notifications`, `settings` |
 
 A migration padrão `create_users_table` do Laravel **não é usada** (não existe tabela
@@ -670,7 +670,7 @@ na aplicação). Slug **global** (URL `/{category-slug}`, ADR-015).
 | id | bigint | N | identity | PK |
 | parent_id | bigint | S | | FK → `categories.id` **RESTRICT**; `CHECK (parent_id <> id)` |
 | name | varchar(120) | N | | |
-| slug | varchar(140) | N | | `CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$')`; não pode ser slug reservado (validação na app: `busca`, `carrinho`, `checkout`, `conta`, `entrar`, `cadastro`, `admin`, `api`, `sitemap.xml`, `robots.txt`) |
+| slug | varchar(140) | N | | `CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$')`; não pode ser slug reservado (validação na app: `busca`, `carrinho`, `checkout`, `conta`, `entrar`, `cadastro`, `recuperar-senha`, `redefinir-senha`, `institucional`, `admin`, `api`, `sanctum`, `sitemap.xml`, `robots.txt` — ADR-015/026a) |
 | description | text | S | | HTML sanitizado |
 | image_path | varchar(500) | S | | chave no disco `s3` |
 | meta_title | varchar(120) | S | | |
@@ -682,6 +682,8 @@ na aplicação). Slug **global** (URL `/{category-slug}`, ADR-015).
 - Único parcial: `categories_slug_active_unique` = `UNIQUE (slug) WHERE deleted_at IS NULL`.
 - Índices:
   - `categories_parent_id_position_index (parent_id, position)` — montar menu/árvore e filhos ordenados.
+- **Fora do MVP (ADR-026):** tabela `url_redirects` (`from_path` único, `to_path`, `status_code` 301/302, `hits`) para
+  redirecionar slugs alterados de categorias/produtos. Não criar agora; no MVP, troca de slug quebra a URL antiga.
 - Ciclos na árvore: validados na aplicação (ao mudar `parent_id`, subir ancestrais com
   CTE recursiva e rejeitar se encontrar o próprio id).
 - Não se pode soft-deletar categoria com filhos ativos ou que seja `primary_category_id` de
@@ -901,6 +903,8 @@ Faixas por quantidade. `price_list_id NULL` = faixa do **preço base**.
 
 - Único: `price_tiers_variant_list_qty_unique` = `UNIQUE NULLS NOT DISTINCT (variant_id, price_list_id, min_quantity)`
   (PG 15+; via `DB::statement`). Garante no máximo uma faixa por limiar, inclusive na base.
+- **Quantidade usada na faixa (ADR-019):** soma da quantidade **faturada** de todas as linhas da mesma variante no
+  carrinho/pedido (ex.: dois cortes de lona da mesma variante somam m²), não a quantidade da linha isolada.
 - O mesmo índice serve a consulta do resolver
   (`WHERE variant_id = ? AND price_list_id IS NOT DISTINCT FROM ? AND min_quantity <= ? ORDER BY min_quantity DESC LIMIT 1`).
 
@@ -1260,6 +1264,7 @@ Nunca soft delete; nunca apagado. Snapshot completo do cliente, endereço e fret
 | number | varchar(20) | N | | **UNIQUE**; `CHECK (number ~ '^[A-Z]{1,5}-[0-9]{6,}$')` |
 | customer_id | bigint | N | | FK → `customers.id` **RESTRICT** |
 | idempotency_key | uuid | N | | header `Idempotency-Key` |
+| checkout_fingerprint | char(64) | N | | sha256 hex do corpo relevante do checkout (endereço, `shipping_quote_id`, `shipping_option_id`, método de pagamento, notas, cupom, itens do carrinho). Mesma chave + fingerprint diferente ⇒ 409 `idempotency_conflict` (ADR-021) |
 | status | varchar(20) | N | `'pending_payment'` | CHECK `IN ('pending_payment','paid','processing','shipped','delivered','ready_for_pickup','picked_up','cancelled')` |
 | payment_status | varchar(10) | N | `'pending'` | CHECK `IN ('pending','approved','failed','refunded','expired')` |
 | payment_method | varchar(20) | N | | CHECK `IN ('pix','credit_card','boleto','invoice')` |
@@ -1348,7 +1353,10 @@ CHECK (status NOT IN ('shipped','delivered') OR shipping_method_type <> 'pickup'
 ```
 
 - Únicos: `orders_uuid_unique`, `orders_number_unique`,
-  `orders_customer_idempotency_unique (customer_id, idempotency_key)` (ADR-009).
+  `orders_customer_idempotency_unique (customer_id, idempotency_key)` (ADR-009/021).
+- Limite de 3 pedidos `pending_payment` simultâneos por cliente (ADR-021): **regra de aplicação** (contagem sob o
+  advisory lock do checkout; 409 `too_many_pending_orders`), sem constraint. Índice de apoio:
+  `orders_customer_pending_index (customer_id) WHERE status = 'pending_payment'`.
 - Índices:
   - `orders_customer_placed_index (customer_id, placed_at DESC)` — "Meus pedidos".
   - `orders_status_placed_index (status, placed_at DESC)` — lista do painel filtrada por status.
@@ -1405,12 +1413,11 @@ CHECK ((sale_unit = 'SQUARE_METER') = (quantity IS NULL)),
 CHECK (sale_unit = 'SQUARE_METER' OR (billable_quantity = quantity AND stock_quantity = quantity))
 ```
 
-- Área (ADR-003): área por peça `a = ceil_to_milli(width_mm × height_mm / 1 000 000)` m²
-  (arredonda **para cima** ao milésimo de m² se houver resíduo);
-  `stock_quantity = a × pieces` (material real — reserva/baixa de estoque e peso);
-  `billable_quantity = max(a, min_billable_area_m2) × pieces` — **decisão:** a área mínima é
-  aplicada **por peça** (custo de produção de cada peça). Sem `min_billable_area_m2`,
-  `billable_quantity = stock_quantity`.
+- Área (ADR-019): área por peça em milésimos de m² `a_milli = round_half_up(width_mm × height_mm / 1000)`
+  (inteiro; `a = a_milli / 1000` m², 3 casas — ex. 1234 × 567 mm = 699 678 mm² ⇒ 699,678 → **700** ⇒ 0,700 m²);
+  `stock_quantity = a × pieces` (baixa/reserva de estoque, **sem** área mínima);
+  `billable_quantity = max(a, min_billable_area_m2) × pieces` — área mínima aplicada **por peça**.
+  Sem `min_billable_area_m2`, `billable_quantity = stock_quantity`.
 - Índices: `order_items_order_id_index (order_id)`; `order_items_variant_id_index (variant_id)`;
   `order_items_product_id_index (product_id)` — relatório de vendas por produto (junto com `orders.paid_at`).
 - Sem `updated_at` (`const UPDATED_AT = null`).
@@ -1429,6 +1436,8 @@ CHECK (sale_unit = 'SQUARE_METER' OR (billable_quantity = quantity AND stock_qua
 | created_at | timestamptz | N | now() | |
 
 - `CHECK (from_status IS DISTINCT FROM to_status)`.
+- `order_status_history_reactivation_check`: `CHECK (from_status IS DISTINCT FROM 'cancelled' OR (to_status = 'paid' AND actor_type = 'system'))`
+  — a única saída de `cancelled` é a reativação por pagamento tardio, exclusiva do sistema (ADR-022).
 - Índice `order_status_history_order_created_index (order_id, created_at)` — timeline do pedido.
 
 ### 3.7 Pagamentos
@@ -1490,6 +1499,33 @@ Log de cada interação/transição com o gateway.
 | created_at | timestamptz | N | now() | |
 
 - Índice `payment_transactions_payment_created_index (payment_id, created_at)`.
+
+#### 3.7.2a `payment_refunds` (ADR-026a)
+
+Solicitações de estorno. Permite o índice "um estorno ativo por pagamento" e o retry seguro
+(RN-PED-021: se o estorno falhar, o cancelamento não é efetivado).
+
+| Coluna | Tipo | Null | Default | Constraint |
+|---|---|---|---|---|
+| id | bigint | N | identity | PK |
+| payment_id | bigint | N | | FK → `payments.id` RESTRICT |
+| amount_cents | bigint | N | | `> 0` (app: `<= amount_cents − refunded_cents` do pagamento) |
+| status | varchar(20) | N | `'pending'` | CHECK `IN ('pending','processing','succeeded','failed')` |
+| reason | varchar(500) | N | | motivo informado pelo operador/sistema |
+| idempotency_key | uuid | N | gen_random_uuid() | **UNIQUE**; enviado ao gateway no `refund` |
+| external_id | varchar(191) | S | | id do estorno no gateway |
+| requested_by_type | varchar(10) | N | | CHECK `IN ('admin','system')` |
+| admin_user_id | bigint | S | | FK → `admin_users.id` RESTRICT; `CHECK ((requested_by_type = 'admin') = (admin_user_id IS NOT NULL))` |
+| failure_reason | varchar(255) | S | | |
+| completed_at | timestamptz | S | | `CHECK (status NOT IN ('succeeded','failed') OR completed_at IS NOT NULL)` |
+| ts | | | | |
+
+- **Um estorno ativo por pagamento**: `payment_refunds_payment_active_unique` =
+  `UNIQUE (payment_id) WHERE status IN ('pending','processing')`.
+- Índice `payment_refunds_payment_id_index (payment_id)`.
+- Fluxo: T1 cria `pending` (sob `payments FOR UPDATE`) → após commit chama `gateway.refund` com `idempotency_key` →
+  T2 (`orders` → `payments` → `payment_refunds` FOR UPDATE) grava `succeeded` + `payment_transactions (refund)` +
+  `payments.refunded_cents` ou `failed`. Sem soft delete.
 
 #### 3.7.3 `webhook_events`
 
@@ -1832,7 +1868,9 @@ Geradas pela migration publicada do pacote (`php artisan vendor:publish --tag=pe
   - `audit_logs_actor_index (actor_type, actor_id, created_at DESC)` — "o que este admin fez".
   - `audit_logs_created_at_index USING BRIN (created_at)` — varredura por período (tabela append-only, BRIN barato).
   - `audit_logs_action_index (action, created_at DESC)` — filtro por tipo de ação.
-- Trigger `forbid_mutation` (seção 3.3.2). Particionamento por mês fica como evolução
+- **Obrigatório (ADR-026a):** `CREATE TRIGGER audit_logs_immutable BEFORE UPDATE OR DELETE ON audit_logs FOR EACH ROW
+  EXECUTE FUNCTION public.forbid_mutation();` (expurgo futuro exigirá `ALTER TABLE ... DISABLE TRIGGER` em migration
+  explícita). Particionamento por mês fica como evolução
   (> 10 M linhas).
 
 #### 3.10.2 `notifications`
@@ -1894,7 +1932,7 @@ Qualquer fluxo que precise de mais de um lock os adquire **nesta ordem** (puland
 | 1 | Checkout do cliente | `SELECT pg_advisory_xact_lock(1001, :customer_id)` (namespace 1001 = checkout) |
 | 2 | `carts` | `FOR UPDATE` (se dois carrinhos: ordem de `id`) |
 | 3 | `orders` | `FOR UPDATE` (se vários: ordem de `id`) |
-| 4 | `payments` | `FOR UPDATE` |
+| 4 | `payments` (e depois `payment_refunds`) | `FOR UPDATE` |
 | 5 | `coupons` | `FOR UPDATE` |
 | 6 | `inventory` | `SELECT ... WHERE variant_id = ANY(:ids) ORDER BY variant_id FOR UPDATE` (ADR-008) |
 
@@ -1902,14 +1940,16 @@ Qualquer fluxo que precise de mais de um lock os adquire **nesta ordem** (puland
 
 **Checkout (`POST /api/v1/checkout`)** — transação T1:
 1. Advisory lock do cliente (serializa duplo clique/abas; a unique de idempotência é a garantia final).
-2. `SELECT id FROM orders WHERE customer_id = ? AND idempotency_key = ?` → existe: retorna o pedido (200) sem efeitos.
+2. `SELECT id, checkout_fingerprint FROM orders WHERE customer_id = ? AND idempotency_key = ?` → existe: fingerprint diferente ⇒ 409
+   `idempotency_conflict`; igual ⇒ retorna o pedido (200) sem efeitos (se não houver pagamento ativo, cria o que faltou — ADR-021).
+   Não existe ⇒ `count(*) WHERE customer_id = ? AND status = 'pending_payment'` ≥ 3 ⇒ 409 `too_many_pending_orders`.
 3. `carts` do cliente `FOR UPDATE`; valida `converted_at IS NULL`.
 4. Recalcula preços (`PriceResolver`) e frete (recalcula a opção `shipping_option_id`; cotação expirada ou preço divergente → 409).
 5. Cupom: `SELECT * FROM coupons WHERE id = ? FOR UPDATE`; valida janela, `is_active`, `min_order_cents`,
    `times_used < usage_limit` e `count(coupon_redemptions WHERE coupon_id=? AND customer_id=? AND cancelled_at IS NULL) < usage_limit_per_customer`.
 6. `inventory` das variantes `FOR UPDATE ORDER BY variant_id`; para cada: `on_hand − reserved >= stock_quantity` senão 409;
    `UPDATE inventory SET reserved = reserved + q`; `INSERT inventory_movements (type='reserve', reference=order)`.
-7. `nextval('order_number_seq')`; `INSERT orders` (status `pending_payment`, `expires_at = now() + settings.checkout.pix_expiry_minutes`),
+7. `nextval('order_number_seq')`; `INSERT orders` (status `pending_payment`, `checkout_fingerprint`, `expires_at = now() + settings.checkout.payment_expiry_minutes[payment_method]`),
    `order_items`, `order_status_history (NULL → pending_payment, actor customer)`.
 8. Cupom: `INSERT coupon_redemptions`; `UPDATE coupons SET times_used = times_used + 1`.
 9. `UPDATE carts SET converted_at = now(), converted_order_id = ?`.
@@ -1919,11 +1959,13 @@ Qualquer fluxo que precise de mais de um lock os adquire **nesta ordem** (puland
 Depois do commit (fora de transação): `gateway.createPayment(payment)` usando
 `payments.idempotency_key`; em seguida T2: `payments FOR UPDATE` → grava `external_id`,
 `pix_copy_paste`, `expires_at` + `payment_transactions (create)`. Falha do gateway →
-`payments.status = 'failed'`; o cliente pode gerar nova cobrança (o índice
-`payments_order_active_unique` permite porque a anterior não está ativa).
+`payments.status = 'failed'`, pedido **permanece** `pending_payment`, resposta 503 `payment_gateway_unavailable`
+(ADR-021); o cliente repete com a mesma chave ou usa `POST /me/orders/{uuid}/payment` (o índice
+`payments_order_active_unique` permite nova cobrança porque a anterior não está ativa).
 
 **Webhook de pagamento aprovado**:
 1. Valida HMAC → `INSERT webhook_events ... ON CONFLICT DO NOTHING` (fora da T principal, commit imediato). Duplicado → 200.
+   Após responder 200, o processamento roda na fila `webhooks` e consulta `gateway.getPayment()` (fonte da verdade, ADR-022).
 2. T: localiza pagamento por `(provider, external_id)` sem lock → `orders FOR UPDATE` → `payments FOR UPDATE`.
    Já `approved` → no-op (ADR-009). Senão: `payments.status='approved', paid_at`; `payment_transactions (approve)`;
    `orders.payment_status='approved', status='paid', paid_at, expires_at=NULL`; history;
@@ -1944,8 +1986,9 @@ T: `orders FOR UPDATE` (revalida status) → `payments FOR UPDATE` (`expired` + 
 `coupons FOR UPDATE` (`times_used − 1`, `coupon_redemptions.cancelled_at`) → `inventory` ordenado
 (`release`) → `orders.status='cancelled'`, `payment_status='expired'`, `cancel_reason_code='payment_expired'` + history.
 
-**Cancelamento de pedido pago (painel)**: `orders` → `payments` (estorno: chamada ao gateway após commit,
-estado `refund` registrado quando confirmado) → `coupons` → `inventory` (`return`: on_hand += q; só antes de `shipped`).
+**Cancelamento de pedido pago (painel)**: cria `payment_refunds` (`pending`) → gateway após commit → se `succeeded`, T:
+`orders` → `payments` → `payment_refunds` → `coupons` → `inventory` (`return`: on_hand += q; só antes de `shipped`) e
+`cancelled`; se `failed`, status do pedido inalterado (RN-PED-021).
 
 **Ajuste de estoque (painel)**: `inventory FOR UPDATE` (1 linha) → valida `novo_on_hand >= reserved` → movimento `adjust`.
 
@@ -1963,6 +2006,8 @@ estado `refund` registrado quando confirmado) → `coupons` → `inventory` (`re
 | Pagamento externo único | `payments (provider, external_id) WHERE external_id IS NOT NULL` |
 | Chamada ao gateway idempotente | `payments.idempotency_key` UNIQUE |
 | Uma cobrança ativa por pedido | `payments (order_id) WHERE status IN ('pending','approved')` |
+| Um estorno ativo por pagamento | `payment_refunds (payment_id) WHERE status IN ('pending','processing')` |
+| Mesma chave, corpo diferente | `orders.checkout_fingerprint` comparado na app (409 `idempotency_conflict`) |
 | Um cupom por pedido | `coupon_redemptions.order_id` UNIQUE |
 | Uma linha de estoque por variante | `inventory.variant_id` UNIQUE |
 | Um endereço padrão | `customer_addresses (customer_id) WHERE is_default AND deleted_at IS NULL` |
@@ -1991,6 +2036,7 @@ estado `refund` registrado quando confirmado) → `coupons` → `inventory` (`re
 | order_items | **nunca** | **sim** | — | — |
 | order_status_history | nunca | **sim** | — | — |
 | payments | **nunca** | não | `payment_transactions` | estorno manual |
+| payment_refunds | nunca | não (status muda) | `payment_transactions` | criação pelo painel |
 | payment_transactions | nunca | **sim** | — | — |
 | webhook_events | nunca (retenção 180 d) | quase (só status/processed_at/error/attempts) | — | — |
 | shipping_methods, shipping_rules | sim | | | create/update/delete |
@@ -2107,37 +2153,48 @@ Roles/Permissions, PriceLists e Shipping (sem admin com senha padrão — criar 
 | `store.phone` | `"4733330000"` | store | true |
 | `store.email` | `"contato@example.com"` | store | true |
 | `orders.number_prefix` | `"CV-"` | checkout | false |
-| `checkout.pix_expiry_minutes` | `30` | checkout | false |
+| `checkout.payment_expiry_minutes` | `{"pix":30,"boleto":4320,"credit_card":30,"invoice":10080}` | checkout | false |
 | `cart.guest_ttl_days` | `30` | checkout | false |
 | `shipping.quote_ttl_minutes` | `30` | shipping | false |
-| `shipping.origin_postal_code` | `"89010001"` | shipping | false |
+| `store.postal_code` | `"89010001"` | store | false |
 | `inventory.default_low_stock_threshold` | `10` | inventory | false |
 | `legal.terms_version` | `"2026-01"` | legal | true |
 | `storefront.free_shipping_banner` | `{"enabled":true,"threshold_cents":50000,"text":"Frete grátis na região de Blumenau acima de R$ 500"}` | storefront | true |
 
-### 7.2 RBAC (guard `admin`)
+### 7.2 RBAC (guard `admin`) — ADR-023
 
-Permissões = matriz de BUSINESS_RULES.md §4.14 (nomes idênticos):
-`dashboard.view`, `products.view`, `products.manage`, `prices.manage`, `promotions.manage`,
-`coupons.manage` (**adicional**: permite ao vendedor gerir só cupons, conforme "✔ (só cupons)" da matriz),
-`inventory.view`, `inventory.move`, `inventory.adjust`, `orders.view`, `orders.fulfill`,
-`orders.pickup` (**adicional**: só `ready_for_pickup → picked_up`, para o vendedor),
-`orders.cancel_unpaid`, `orders.cancel_paid`, `orders.notes`, `payments.view`, `payments.reconcile`,
-`customers.view`, `customers.view_sensitive`, `customers.manage`, `customers.manage_price_list`
-(**adicional**: atribuir tabela de preço), `shipping.manage`, `reports.view`, `reports.sales`,
-`reports.inventory`, `reports.financial`, `admin_users.manage`, `settings.manage`, `audit_logs.view`.
+Permissões = matriz de BUSINESS_RULES.md §4.14 + as quatro de ADR-023 (`inventory.view` já estava na matriz):
 
-Roles (nomes definidos pelo coordenador; equivalência com BUSINESS_RULES entre parênteses):
-
-| Role | Permissões |
+| Permissão | Significado |
 |---|---|
-| `super-admin` | todas; `Gate::before` retorna `true` para este role. Único que tem `admin_users.manage` por padrão |
-| `gerente` (`admin` em BUSINESS_RULES) | todas exceto `admin_users.manage` |
-| `vendedor` (`seller`) | `dashboard.view`, `products.view`, `coupons.manage`, `inventory.view`, `orders.view`, `orders.pickup`, `orders.cancel_unpaid`, `orders.notes`, `payments.view`, `customers.view`, `customers.view_sensitive`, `customers.manage`, `reports.sales` |
-| `estoquista` (`warehouse`) | `dashboard.view`, `products.view`, `inventory.view`, `inventory.move`, `inventory.adjust`, `orders.view`, `orders.fulfill`, `orders.pickup`, `orders.notes`, `reports.inventory` |
-| `financeiro` (`finance`) | `dashboard.view`, `products.view`, `inventory.view`, `orders.view`, `orders.cancel_unpaid`, `orders.cancel_paid`, `orders.notes`, `payments.view`, `payments.reconcile`, `customers.view`, `customers.view_sensitive`, `reports.view`, `reports.sales`, `reports.financial`, `audit_logs.view` |
+| `dashboard.view` | painel inicial |
+| `products.view` / `products.manage` | ver / gerir produtos, variantes, categorias, marcas |
+| `prices.manage` | preço base e faixas (`price_tiers` base) das variantes |
+| `pricing.manage` (ADR-023) | tabelas de preço, faixas por tabela, `customer_prices`, atribuir tabela a cliente/empresa |
+| `promotions.manage` | promoções e cupons (vendedor: Policy restringe a cupons) |
+| `inventory.view` / `inventory.move` / `inventory.adjust` | ver estoque / entrada `in` / ajuste `adjust` |
+| `orders.view` / `orders.fulfill` / `orders.cancel_unpaid` / `orders.cancel_paid` / `orders.notes` | conforme matriz (vendedor em `orders.fulfill`: Policy restringe a `ready_for_pickup → picked_up`) |
+| `payments.view` / `payments.reconcile` | transações (vendedor: Policy mostra só status) / reconsultar gateway |
+| `customers.view` / `customers.view_sensitive` | ver clientes mascarado / CPF-CNPJ completos |
+| `customers.update` (ADR-023) | editar dados cadastrais e endereços |
+| `customers.manage` | bloquear/desbloquear, converter PF↔PJ (atribuir tabela exige `pricing.manage`) |
+| `shipping.manage` | métodos, zonas, regras de frete |
+| `reports.view` (vendedor/estoque: Policy restringe a vendas/estoque) / `reports.export` (ADR-023, CSV) | relatórios |
+| `admin_users.manage` | usuários e papéis |
+| `settings.manage` | configurações |
+| `audit_logs.view` | auditoria |
 
-`reports.view` = todos os relatórios; `reports.sales`/`reports.inventory` = subconjuntos (👁 da matriz).
+Roles (`name` em inglês; rótulo pt-BR exibido no painel):
+
+| Role (rótulo) | Permissões |
+|---|---|
+| `super-admin` (Super Admin) | nenhuma atribuída explicitamente: `Gate::before` retorna `true` para este role |
+| `manager` (Gerente) | **todas** as permissões acima |
+| `seller` (Vendedor) | `dashboard.view`, `products.view`, `promotions.manage`, `inventory.view`, `orders.view`, `orders.fulfill`, `orders.cancel_unpaid`, `orders.notes`, `payments.view`, `customers.view`, `customers.view_sensitive`, `customers.update`, `customers.manage`, `reports.view` |
+| `warehouse` (Estoque/Expedição) | `dashboard.view`, `products.view`, `inventory.view`, `inventory.move`, `inventory.adjust`, `orders.view`, `orders.fulfill`, `orders.notes`, `reports.view` |
+| `finance` (Financeiro) | `dashboard.view`, `products.view`, `inventory.view`, `orders.view`, `orders.cancel_unpaid`, `orders.cancel_paid`, `orders.notes`, `payments.view`, `payments.reconcile`, `customers.view`, `customers.view_sensitive`, `reports.view`, `reports.export`, `audit_logs.view` |
+
+Rótulos pt-BR ficam em `lang/pt_BR/roles.php` (a tabela `roles` do spatie não tem coluna de rótulo).
 
 Admin: `name='Administrador'`, `email='admin@example.com'`, senha de `env('SEED_ADMIN_PASSWORD', 'password')`
 (somente `local`/`testing`), role `super-admin`.
@@ -2288,6 +2345,7 @@ carrinho com item `pickup_only` → só retirada.
 | Job | Frequência | Ação |
 |---|---|---|
 | `ExpirePendingOrders` | 1 min | seção 4.3 |
+| `ReconcilePendingPayments` | 5 min | `payments WHERE status='pending'` (usa `payments_pending_expiry_index`) → `getPayment()`; cobre webhook perdido (ADR-022) |
 | `PurgeExpiredCarts` | diário | `DELETE FROM carts WHERE (converted_at IS NULL AND expires_at < now()) OR converted_at < now() - interval '30 days'` (cascata em itens/cotações) |
 | `shipping:prune-quotes` | diário | `DELETE FROM shipping_quotes WHERE expires_at < now() - interval '7 days'` |
 | `PurgeWebhookEvents` | diário | apaga `processed`/`ignored` > 180 dias não referenciados |
@@ -2322,6 +2380,7 @@ carrinho com item `pickup_only` → só retirada.
 | — | Cupom `free_shipping` → `orders.shipping_discount_cents`; `total = subtotal − discount + shipping − shipping_discount` (CHECK) | Backend |
 | — | `payments`: no máximo uma ativa por pedido; gateway chamado **fora** da transação com `payments.idempotency_key` | Backend |
 | — | CNPJ aceito **alfanumérico** (`^[0-9A-Z]{12}[0-9]{2}$`) em `companies.cnpj` e `orders.customer_document` (vigente desde 07/2026; fecha Q-13 do lado do banco) | Backend, Front, Security |
-| — | Roles seed com nomes do coordenador (`super-admin`, `gerente`, `vendedor`, `estoquista`, `financeiro`) e permissões com nomes da matriz de BUSINESS_RULES §4.14 (+ `coupons.manage`, `orders.pickup`, `customers.manage_price_list`, `reports.sales`, `reports.inventory`, `reports.financial`). BUSINESS_RULES usa `admin/seller/warehouse/finance` — **conflito de nomes a resolver em ADR** | Admin, Backend, PO |
+| — | Roles (ADR-023): `super-admin`, `manager`, `seller`, `warehouse`, `finance`; permissões = matriz BUSINESS_RULES §4.14 + `pricing.manage`, `inventory.view`, `customers.update`, `reports.export`; restrições "(só X)" da matriz via Policy | Admin, Backend |
+| — | ADR-019/021/022/026a: área por peça `round_half_up(w×h/1000)` milésimos de m²; faixas de preço pela soma da variante no carrinho; `orders.checkout_fingerprint`; limite de 3 pendentes = regra de app; `cancelled → paid` só pelo sistema (CHECK em `order_status_history`); expiração por método em `settings.checkout.payment_expiry_minutes`; nova tabela `payment_refunds` com um estorno ativo por pagamento; trigger de imutabilidade em `audit_logs`; `url_redirects` fora do MVP | Backend |
 | — | Pedido: `cancel_reason_code` (`payment_expired`/`customer`/`admin`/`payment_failed`), `cancellation_requested_at`, `refunded_at`, `picked_up_at`, `picked_up_by_*`; pagamento tardio reativa pedido expirado se houver estoque (RN-PAG-012) | Backend |
 | — | `customers.terms_version/terms_accepted_at/terms_accepted_ip` (RN-LGPD-002) | Backend, Front |
