@@ -72,8 +72,7 @@ return new class extends Migration
 
         Schema::create('customer_addresses', function (Blueprint $table) {
             $table->id();
-            // Not in DATABASE.md: public id so addresses can be referenced by uuid
-            // (ARCHITECTURE.md CustomerDirectory::addressForCustomer / SECURITY.md §5).
+            // ADR-028: public id, customer routes use /me/addresses/{uuid}.
             $table->uuid('uuid')->default(DB::raw('gen_random_uuid()'))->unique();
             $table->foreignId('customer_id')->constrained('customers')->cascadeOnDelete();
             $table->string('label', 50)->nullable();

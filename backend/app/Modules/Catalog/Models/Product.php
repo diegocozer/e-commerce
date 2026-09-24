@@ -39,6 +39,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property bool $is_active
  * @property bool $is_featured
  * @property bool $pickup_only
+ * @property list<array{label: string, value: string}>|null $specifications
  */
 class Product extends Model
 {
@@ -53,7 +54,7 @@ class Product extends Model
         'name', 'slug', 'short_description', 'description', 'sale_unit', 'brand_id', 'primary_category_id',
         'min_quantity', 'max_quantity', 'quantity_step', 'min_billable_area_m2', 'fixed_width_mm',
         'min_width_mm', 'max_width_mm', 'min_height_mm', 'max_height_mm', 'meta_title', 'meta_description',
-        'is_active', 'is_featured', 'pickup_only',
+        'is_active', 'is_featured', 'pickup_only', 'specifications',
     ];
 
     protected $hidden = ['search_vector'];
@@ -74,6 +75,7 @@ class Product extends Model
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
             'pickup_only' => 'boolean',
+            'specifications' => 'array',
         ];
     }
 

@@ -7,9 +7,10 @@ namespace App\Modules\Identity\Enums;
 use App\Modules\Identity\Enums\AdminPermission as P;
 
 /**
- * Admin roles (ADR-023 / ADR-027). `super-admin` gets everything through
- * Gate::before; `manager` gets every permission except admin_users.manage
- * (only super-admin manages users and roles).
+ * Seeded admin roles (ADR-023 / ADR-027, assignment of API.md §6.2).
+ * `super-admin` gets everything through Gate::before; `manager` gets every
+ * permission except admin_users.manage (only super-admin manages users and
+ * roles). Custom roles may be created through the panel; these are "system" roles.
  */
 enum AdminRole: string
 {
@@ -37,13 +38,13 @@ enum AdminRole: string
             self::SuperAdmin => [],
             self::Manager => array_values(array_filter(P::cases(), static fn (P $p): bool => $p !== P::AdminUsersManage)),
             self::Seller => [
-                P::DashboardView, P::ProductsView, P::PromotionsManage, P::InventoryView, P::OrdersView,
-                P::OrdersFulfill, P::OrdersCancelUnpaid, P::OrdersNotes, P::PaymentsView, P::CustomersView,
-                P::CustomersViewSensitive, P::CustomersUpdate, P::CustomersManage, P::ReportsView,
+                P::DashboardView, P::ProductsView, P::CouponsManage, P::InventoryView, P::OrdersView,
+                P::OrdersPickup, P::OrdersCancelUnpaid, P::OrdersNotes, P::PaymentsView, P::CustomersView,
+                P::CustomersViewSensitive, P::CustomersUpdate, P::ReportsSales,
             ],
             self::Warehouse => [
                 P::DashboardView, P::ProductsView, P::InventoryView, P::InventoryMove, P::InventoryAdjust,
-                P::OrdersView, P::OrdersFulfill, P::OrdersNotes, P::ReportsView,
+                P::OrdersView, P::OrdersFulfill, P::OrdersPickup, P::OrdersNotes, P::ReportsInventory,
             ],
             self::Finance => [
                 P::DashboardView, P::ProductsView, P::InventoryView, P::OrdersView, P::OrdersCancelUnpaid,

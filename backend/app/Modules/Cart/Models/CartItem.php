@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $width_mm
  * @property int|null $height_mm
  * @property int|null $pieces
+ * @property int|null $last_seen_unit_price_cents
  */
 class CartItem extends Model
 {
@@ -34,6 +35,8 @@ class CartItem extends Model
 
     protected $fillable = ['variant_id', 'quantity', 'width_mm', 'height_mm', 'pieces'];
 
+    // `last_seen_unit_price_cents` is written by the Cart service only (price-changed notice, ADR-028).
+
     protected function casts(): array
     {
         return [
@@ -41,6 +44,7 @@ class CartItem extends Model
             'width_mm' => 'integer',
             'height_mm' => 'integer',
             'pieces' => 'integer',
+            'last_seen_unit_price_cents' => 'integer',
         ];
     }
 

@@ -38,12 +38,14 @@ return new class extends Migration
             $table->integer('width_mm')->nullable();
             $table->integer('height_mm')->nullable();
             $table->integer('pieces')->nullable();
+            // ADR-028: unit price the customer last saw (drives the "price changed" notice).
+            $table->bigInteger('last_seen_unit_price_cents')->nullable();
             $table->timestampsTz();
 
             $table->index('variant_id');
         });
 
-        PgSchema::positive('cart_items', 'quantity', 'width_mm', 'height_mm', 'pieces');
+        PgSchema::positive('cart_items', 'quantity', 'width_mm', 'height_mm', 'pieces', 'last_seen_unit_price_cents');
         PgSchema::check('cart_items', 'shape', <<<'SQL'
             (quantity IS NOT NULL AND width_mm IS NULL AND height_mm IS NULL AND pieces IS NULL) OR
             (quantity IS NULL AND width_mm IS NOT NULL AND height_mm IS NOT NULL AND pieces IS NOT NULL)

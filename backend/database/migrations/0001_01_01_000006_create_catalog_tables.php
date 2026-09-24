@@ -96,6 +96,8 @@ return new class extends Migration
             $table->boolean('is_active')->default(false);
             $table->boolean('is_featured')->default(false);
             $table->boolean('pickup_only')->default(false);
+            // ADR-028: technical specification sheet, list of {label, value} (RN-CAT-015).
+            $table->jsonb('specifications')->nullable();
             $table->timestampsTz();
             $table->softDeletesTz();
 
@@ -108,6 +110,7 @@ return new class extends Migration
         DB::statement('ALTER TABLE products ADD COLUMN search_vector tsvector NULL');
 
         PgSchema::regex('products', 'slug', PgSchema::SLUG_REGEX);
+        PgSchema::check('products', 'specifications_array', "specifications IS NULL OR jsonb_typeof(specifications) = 'array'");
         PgSchema::enum('products', 'sale_unit', self::SALE_UNITS);
         PgSchema::check('products', 'min_quantity_positive', 'min_quantity > 0');
         PgSchema::check('products', 'quantity_step_positive', 'quantity_step > 0');
