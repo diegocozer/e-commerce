@@ -12,6 +12,7 @@ use App\Modules\Orders\Models\OrderItem;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -107,7 +108,7 @@ abstract class ReportsTestCase extends TestCase
     }
 
     /** @param array<string, string|int> $query */
-    protected function report(string $report, array $query = []): \Illuminate\Testing\TestResponse
+    protected function report(string $report, array $query = []): TestResponse
     {
         return $this->getJson('/api/v1/admin/reports/'.$report.'?'.http_build_query($query));
     }

@@ -25,7 +25,7 @@ return [
         'Shipping' => ['Settings'],
         'Payments' => ['Settings'],
         'Catalog' => ['Pricing', 'Inventory', 'Settings'],
-        'Cart' => ['Catalog', 'Pricing', 'Inventory', 'Shipping', 'Customers'],
+        'Cart' => ['Catalog', 'Pricing', 'Inventory', 'Shipping', 'Customers', 'Settings'],
         'Orders' => ['Inventory', 'Payments', 'Pricing', 'Customers', 'Settings'],
         'Checkout' => ['Cart', 'Orders', 'Payments', 'Pricing', 'Shipping', 'Inventory', 'Customers', 'Settings'],
         'Notifications' => ['Orders', 'Payments', 'Customers', 'Inventory', 'Catalog', 'Identity', 'Settings'],

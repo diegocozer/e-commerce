@@ -126,5 +126,4 @@ final class ReportRequest extends FormRequest
             'date_from', 'date_to', 'group_by', 'category_id', 'brand_id', 'shipping_method_id', 'status', 'limit', 'format',
         ])));
     }
-
 }

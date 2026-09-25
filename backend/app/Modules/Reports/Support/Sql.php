@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Reports\Support;
 
 use App\Modules\Reports\DTOs\ReportPeriod;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use InvalidArgumentException;
 
@@ -111,7 +113,7 @@ final class Sql
     /** ISO-8601 UTC string of a timestamptz value returned by PostgreSQL. */
     public static function isoDateTime(mixed $value): ?string
     {
-        return $value === null ? null : \Carbon\CarbonImmutable::parse((string) $value)->utc()->format('Y-m-d\TH:i:s\Z');
+        return $value === null ? null : CarbonImmutable::parse((string) $value)->utc()->format('Y-m-d\TH:i:s\Z');
     }
 
     /**
@@ -122,7 +124,7 @@ final class Sql
     public static function buckets(ReportPeriod $period, string $groupBy): array
     {
         $cursor = match ($groupBy) {
-            'week' => $period->from->startOfWeek(\Carbon\CarbonInterface::MONDAY),
+            'week' => $period->from->startOfWeek(CarbonInterface::MONDAY),
             'month' => $period->from->startOfMonth(),
             default => $period->from,
         };

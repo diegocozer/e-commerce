@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Catalog\Exceptions;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Translation\ArrayLoader;
+use Illuminate\Translation\Translator;
+use Illuminate\Validation\Validator;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -16,6 +19,9 @@ final class InvalidSaleQuantity extends ValidationException
 {
     public string $field = 'quantity';
 
+    /** @var array<string, list<string>> */
+    private array $messages = [];
+
     public string $reason = 'invalid';
 
     /** @var list<int|float>|null */
@@ -24,13 +30,22 @@ final class InvalidSaleQuantity extends ValidationException
     /** @param  list<int|float>|null  $suggestions */
     public static function on(string $field, string $message, string $reason = 'invalid', ?array $suggestions = null): self
     {
-        /** @var self $e */
-        $e = self::withMessages([$field => [$message]]);
+        // Built without the Validator facade so the resolver stays usable in pure unit tests.
+        $validator = new Validator(new Translator(new ArrayLoader, 'pt_BR'), [], []);
+        $e = new self($validator);
+        $e->message = $message;
+        $e->messages = [$field => [$message]];
         $e->field = $field;
         $e->reason = $reason;
         $e->suggestions = $suggestions;
 
         return $e;
+    }
+
+    /** @return array<string, list<string>> */
+    public function errors(): array
+    {
+        return $this->messages;
     }
 
     public function message(): string

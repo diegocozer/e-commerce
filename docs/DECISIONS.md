@@ -411,3 +411,11 @@ enviado. A área mínima afeta só o preço.
   canônica; API.md/UX que citem `pix_expiry_minutes` referem-se a ela.
 - Critério de aceite com o seed: vinil 5 m = R$ 79,50 + entrega própria
   Blumenau R$ 20,00 = **R$ 99,50**.
+
+## ADR-032 — Relatórios (B-E)
+
+Aceitas as decisões do módulo Reports: venda contabilizada = pagamento aprovado e
+pedido não cancelado; receita em visão de caixa (estornos por `refunded_at`);
+margem e valor de estoque usam `cost_cents` **atual** da variante (evolução:
+snapshot de custo em `order_items`); tempo de atendimento em horas corridas no
+MVP. `Settings` é módulo-base e pode ser consumido por `Cart`.
