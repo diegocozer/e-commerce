@@ -81,7 +81,7 @@ jobs:
 
             - name: Upload JUnit report
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: backend-junit
                   path: backend/junit.xml
@@ -111,7 +111,7 @@ jobs:
             - run: npm run test
             - run: npm run build
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                   name: ${{ matrix.app }}-dist
                   path: ${{ matrix.app }}/dist
