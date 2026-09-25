@@ -2,14 +2,14 @@
 # Web image: nginx + built SPAs (storefront at /, admin at /admin).
 # In docker-compose (dev) the dist folders are bind-mounted instead.
 
-FROM node:22-alpine AS storefront
+FROM node:25-alpine AS storefront
 WORKDIR /build
 COPY storefront/package.json storefront/package-lock.json ./
 RUN npm ci
 COPY storefront/ ./
 RUN npm run build
 
-FROM node:22-alpine AS admin
+FROM node:25-alpine AS admin
 WORKDIR /build
 COPY admin/package.json admin/package-lock.json ./
 RUN npm ci
