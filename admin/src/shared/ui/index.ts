@@ -10,3 +10,4 @@ export { ListToolbar, FilterSelect } from './ListToolbar';
 export { KeyValue } from './KeyValue';
 export { notify } from './notify';
 export { SnackbarHost } from './SnackbarHost';
+export { VariantPicker } from './VariantPicker';
