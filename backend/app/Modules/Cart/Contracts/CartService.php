@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Cart\Contracts;
 
 use App\Modules\Cart\DTOs\CartSnapshot;
+use App\Modules\Customers\DTOs\CartMergeReport;
 use App\Modules\Pricing\DTOs\CouponContext;
 use App\Modules\Shipping\DTOs\CartLineLogisticsInput;
 use App\Shared\Domain\Money;
@@ -52,9 +53,7 @@ interface CartService
     /**
      * Merges a valid guest cart into the customer's active cart (DATABASE.md §3.5.1,
      * RN-CAR-020) and deletes the guest cart. Returns null when the token does not
-     * point to a valid guest cart.
-     *
-     * @return array<string, mixed>|null CartMergeReport (API.md §2.5)
+     * point to a valid guest cart. Also exposed as Customers\Contracts\GuestCartMerger.
      */
-    public function mergeGuestCart(string $guestToken, int $customerId): ?array;
+    public function mergeGuestCart(string $guestToken, int $customerId): ?CartMergeReport;
 }

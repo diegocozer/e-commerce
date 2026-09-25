@@ -732,6 +732,7 @@ SKU e peso ficam nas variantes.
 | is_active | boolean | N | false | nasce rascunho |
 | is_featured | boolean | N | false | vitrine da home |
 | pickup_only | boolean | N | false | item só pode ser retirado (volumoso/frágil); o motor de frete oferece só `pickup` (SHIPPING.md §9) |
+| specifications | jsonb | S | | ADR-028: ficha técnica, lista `[{label, value}]`; `CHECK (specifications IS NULL OR jsonb_typeof(specifications) = 'array')` |
 | search_vector | tsvector | S | | mantida pela aplicação (ver abaixo) |
 | ts, sd | | | | |
 
@@ -1159,6 +1160,7 @@ Expiração 60 min / throttle 60 s (config).
 | Coluna | Tipo | Null | Default | Constraint |
 |---|---|---|---|---|
 | id | bigint | N | identity | PK |
+| uuid | uuid | N | gen_random_uuid() | ADR-028: **UNIQUE**; route key das rotas do cliente (`/me/addresses/{uuid}`) |
 | customer_id | bigint | N | | FK → `customers.id` **CASCADE** |
 | label | varchar(50) | S | | "Loja", "Casa" |
 | recipient_name | varchar(150) | N | | |
@@ -1217,6 +1219,7 @@ Apenas o que o cliente escolheu (ADR-007); preços recalculados a cada leitura.
 | width_mm | integer | S | | `> 0`; só SQUARE_METER (com largura fixa o backend grava a largura fixa) |
 | height_mm | integer | S | | `> 0`; só SQUARE_METER |
 | pieces | integer | S | | `> 0`; só SQUARE_METER |
+| last_seen_unit_price_cents | bigint | S | | ADR-028: `> 0`; último preço unitário visto pelo cliente (aviso `price_changed`) |
 | ts | | | | |
 
 - CHECK de forma (`cart_items_shape_check`):
@@ -2137,9 +2140,10 @@ GROUP BY 1 ORDER BY 1;
 
 Seeders idempotentes (`updateOrCreate` por chave natural: slug, sku, code, email, key).
 `DatabaseSeeder` chama, nesta ordem: `SettingsSeeder`, `RolesAndPermissionsSeeder`,
-`AdminUserSeeder`, `PriceListSeeder`, `CatalogSeeder` (categorias, marcas, produtos, variantes,
-estoque via `InventoryService` com movimento `in` "Carga inicial"), `PricingSeeder`,
-`PromotionSeeder`, `ShippingSeeder`, `CustomerSeeder`. Em `production` apenas Settings,
+`PriceListSeeder`, `IbgeCitySeeder`, `ShippingSeeder` (referência, também em produção) e, fora de produção,
+`AdminUserSeeder`, `CatalogSeeder` (categorias, marcas, produtos, variantes, estoque com movimento `in`
+"Carga inicial" e `search_vector`), `CustomerSeeder` (antes de Pricing: `customer_prices` usa a empresa PJ),
+`PricingSeeder`, `PromotionSeeder`. Em `production` apenas Settings,
 Roles/Permissions, PriceLists e Shipping (sem admin com senha padrão — criar via
 `php artisan admin:create`).
 
@@ -2153,13 +2157,17 @@ Roles/Permissions, PriceLists e Shipping (sem admin com senha padrão — criar 
 | `store.phone` | `"4733330000"` | store | true |
 | `store.email` | `"contato@example.com"` | store | true |
 | `orders.number_prefix` | `"CV-"` | checkout | false |
-| `checkout.payment_expiry_minutes` | `{"pix":30,"boleto":4320,"credit_card":30,"invoice":10080}` | checkout | false |
+| `checkout.payment_expiry_minutes` | `{"pix":30,"boleto":4320,"credit_card":30,"invoice":10080}` | checkout | true (chave canônica — ADR-031; `pix_expiry_minutes` em API/UX = entrada `pix`) |
 | `cart.guest_ttl_days` | `30` | checkout | false |
 | `shipping.quote_ttl_minutes` | `30` | shipping | false |
-| `store.postal_code` | `"89010001"` | store | false |
+| `shipping.origin_postal_code` | `"89010001"` | shipping | false |
 | `inventory.default_low_stock_threshold` | `10` | inventory | false |
 | `legal.terms_version` | `"2026-01"` | legal | true |
 | `storefront.free_shipping_banner` | `{"enabled":true,"threshold_cents":50000,"text":"Frete grátis na região de Blumenau acima de R$ 500"}` | storefront | true |
+
+Demais chaves da whitelist de API.md §3.G.13 (`store.legal_name`, `store.whatsapp`, `store.opening_hours`,
+`store.social_links`, `checkout.min_order_cents`, `inventory.show_low_stock_quantity`,
+`notifications.*`, `content.*`) são semeadas com os defaults de `App\Modules\Settings\Enums\SettingKey`.
 
 ### 7.2 RBAC (guard `admin`) — ADR-023
 
@@ -2184,14 +2192,19 @@ Permissões = matriz de BUSINESS_RULES.md §4.14 + as quatro de ADR-023 (`invent
 | `settings.manage` | configurações |
 | `audit_logs.view` | auditoria |
 
+> **ADR-028/031:** o catálogo canônico de permissões e a atribuição aos papéis estão em
+> **API.md §6.1–§6.2** (acrescenta `coupons.manage`, `orders.pickup`, `reports.sales`,
+> `reports.inventory` à lista acima). Implementado em `App\Modules\Identity\Enums\AdminPermission`
+> e `AdminRole`; o seeder aplica exatamente a tabela abaixo.
+
 Roles (`name` em inglês; rótulo pt-BR exibido no painel):
 
 | Role (rótulo) | Permissões |
 |---|---|
 | `super-admin` (Super Admin) | nenhuma atribuída explicitamente: `Gate::before` retorna `true` para este role |
-| `manager` (Gerente) | **todas** as permissões acima |
-| `seller` (Vendedor) | `dashboard.view`, `products.view`, `promotions.manage`, `inventory.view`, `orders.view`, `orders.fulfill`, `orders.cancel_unpaid`, `orders.notes`, `payments.view`, `customers.view`, `customers.view_sensitive`, `customers.update`, `customers.manage`, `reports.view` |
-| `warehouse` (Estoque/Expedição) | `dashboard.view`, `products.view`, `inventory.view`, `inventory.move`, `inventory.adjust`, `orders.view`, `orders.fulfill`, `orders.notes`, `reports.view` |
+| `manager` (Gerente) | todas **exceto** `admin_users.manage` (ADR-027) |
+| `seller` (Vendedor) | `dashboard.view`, `products.view`, `coupons.manage`, `inventory.view`, `orders.view`, `orders.pickup`, `orders.cancel_unpaid`, `orders.notes`, `payments.view`, `customers.view`, `customers.view_sensitive`, `customers.update`, `reports.sales` |
+| `warehouse` (Estoque/Expedição) | `dashboard.view`, `products.view`, `inventory.view`, `inventory.move`, `inventory.adjust`, `orders.view`, `orders.fulfill`, `orders.pickup`, `orders.notes`, `reports.inventory` |
 | `finance` (Financeiro) | `dashboard.view`, `products.view`, `inventory.view`, `orders.view`, `orders.cancel_unpaid`, `orders.cancel_paid`, `orders.notes`, `payments.view`, `payments.reconcile`, `customers.view`, `customers.view_sensitive`, `reports.view`, `reports.export`, `audit_logs.view` |
 
 Rótulos pt-BR ficam em `lang/pt_BR/roles.php` (a tabela `roles` do spatie não tem coluna de rótulo).
@@ -2272,8 +2285,10 @@ imagem placeholder (`products/placeholder.webp`) por produto. Após o seed, roda
 - `price_tiers` (lista `wholesale`): `VIN-BR-122-BR` ≥ 1 m → 14,50; ≥ 50 m → 13,20.
 - `customer_prices`: empresa do cliente PJ, `LON-FL-440-SM` → 25,90, sem vigência.
 - Promoção de variante: `FIT-DF-19` `promo_price_cents=990` de now() até now()+30 dias.
-- `promotions`: "Semana do Vinil" — `percent`, `value=1000` (10%), `scope='targeted'`, alvo `promotion_categories = vinis`,
-  `starts_at=now()`, `ends_at=now()+7 dias`, `priority=10`.
+- `promotions`: "Semana do Vinil" — `percent`, `value=1000` (10%), `scope='targeted'`, alvo **produtos específicos**
+  (`promotion_products` = `vinil-adesivo-preto-fosco-122m`, `vinil-transparente-100m`), `starts_at=now()`,
+  `ends_at=now()+7 dias`, `priority=10`. **Nunca** a categoria `vinis` inteira nem `vinil-adesivo-branco-122m`,
+  que deve sair a R$ 15,90/m (ADR-028/031: 5 m = R$ 79,50; + entrega própria Blumenau R$ 20,00 = R$ 99,50).
 - `coupons`: `BEMVINDO10` — percent 1000, `max_discount_cents=5000`, `usage_limit_per_customer=1`;
   `FRETEGRATIS` — free_shipping, `min_order_cents=20000`, `usage_limit=100`;
   `DESC20` — fixed 2000, `min_order_cents=15000`, `ends_at=now()+30 dias`.

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace App\Shared\Contracts;
+namespace App\Shared\PostalCode;
 
-/** Result of PostalCodeLookup (SHIPPING.md §4.8 / ARCHITECTURE.md §7.3). */
+/** Result of PostalCodeLookup (SHIPPING.md §4.8, ADR-029). */
 final readonly class PostalCodeInfo
 {
     public function __construct(
@@ -13,7 +13,6 @@ final readonly class PostalCodeInfo
         public ?string $district,
         public string $city,
         public string $state,
-        public ?string $cityIbgeCode,
-        public string $source = 'viacep',
+        public string $cityIbgeCode,
     ) {}
 }

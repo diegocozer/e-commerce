@@ -50,12 +50,12 @@ final class FoundationServicesTest extends TestCase
         $settings = app(SettingsRepository::class);
         $admin = AdminUser::factory()->create();
 
-        self::assertSame(30, $settings->int(SettingKey::CheckoutPixExpiryMinutes)); // default without rows
+        self::assertSame(30, $settings->array(SettingKey::CheckoutPaymentExpiryMinutes)['pix']); // default without rows
         self::assertSame('CV-', $settings->string(SettingKey::OrdersNumberPrefix));
 
-        $settings->set(SettingKey::CheckoutPixExpiryMinutes, 45, ActorRef::admin($admin->id));
-        self::assertSame(45, $settings->int(SettingKey::CheckoutPixExpiryMinutes));
-        self::assertSame($admin->id, DB::table('settings')->where('key', 'checkout.pix_expiry_minutes')->value('updated_by'));
+        $settings->set(SettingKey::CheckoutPaymentExpiryMinutes, ['pix' => 45, 'boleto' => 4320, 'credit_card' => 30, 'invoice' => 10080], ActorRef::admin($admin->id));
+        self::assertSame(45, $settings->array(SettingKey::CheckoutPaymentExpiryMinutes)['pix']);
+        self::assertSame($admin->id, DB::table('settings')->where('key', 'checkout.payment_expiry_minutes')->value('updated_by'));
 
         $settings->set(SettingKey::StoreWhatsapp, null);
         self::assertNull($settings->get(SettingKey::StoreWhatsapp));
@@ -63,7 +63,7 @@ final class FoundationServicesTest extends TestCase
         self::assertArrayHasKey('store.name', $settings->public());
         self::assertArrayNotHasKey('store.document', $settings->public());
 
-        Event::assertDispatched(SettingsUpdated::class, fn (SettingsUpdated $e): bool => $e->keys === ['checkout.pix_expiry_minutes']);
+        Event::assertDispatched(SettingsUpdated::class, fn (SettingsUpdated $e): bool => $e->keys === ['checkout.payment_expiry_minutes']);
     }
 
     public function test_morph_map_is_enforced(): void

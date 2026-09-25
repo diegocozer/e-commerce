@@ -21,7 +21,8 @@ enum SettingKey: string
     case StoreOpeningHours = 'store.opening_hours';
     case StoreSocialLinks = 'store.social_links';
     case OrdersNumberPrefix = 'orders.number_prefix';
-    case CheckoutPixExpiryMinutes = 'checkout.pix_expiry_minutes';
+    /** ADR-031: canonical key; per-method expiry in minutes (API/UX "pix_expiry_minutes" = its `pix` entry). */
+    case CheckoutPaymentExpiryMinutes = 'checkout.payment_expiry_minutes';
     case CheckoutMinOrderCents = 'checkout.min_order_cents';
     case CartGuestTtlDays = 'cart.guest_ttl_days';
     case ShippingQuoteTtlMinutes = 'shipping.quote_ttl_minutes';
@@ -41,8 +42,9 @@ enum SettingKey: string
     public function type(): string
     {
         return match ($this) {
-            self::StoreAddress, self::StoreSocialLinks, self::StorefrontFreeShippingBanner => 'object',
-            self::CheckoutPixExpiryMinutes, self::CheckoutMinOrderCents, self::CartGuestTtlDays,
+            self::StoreAddress, self::StoreSocialLinks, self::StorefrontFreeShippingBanner,
+            self::CheckoutPaymentExpiryMinutes => 'object',
+            self::CheckoutMinOrderCents, self::CartGuestTtlDays,
             self::ShippingQuoteTtlMinutes => 'integer',
             self::InventoryDefaultLowStockThreshold => 'decimal',
             self::InventoryShowLowStockQuantity, self::NotificationsWhatsappEnabled => 'boolean',
@@ -68,7 +70,7 @@ enum SettingKey: string
             self::StoreOpeningHours => 'Seg–Sex 8h–18h',
             self::StoreSocialLinks => ['instagram' => null, 'facebook' => null, 'youtube' => null],
             self::OrdersNumberPrefix => 'CV-',
-            self::CheckoutPixExpiryMinutes => 30,
+            self::CheckoutPaymentExpiryMinutes => ['pix' => 30, 'boleto' => 4320, 'credit_card' => 30, 'invoice' => 10080],
             self::CheckoutMinOrderCents => 0,
             self::CartGuestTtlDays => 30,
             self::ShippingQuoteTtlMinutes => 30,
