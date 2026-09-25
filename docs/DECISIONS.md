@@ -386,3 +386,28 @@ Após a revisão de API.md §8.2:
 - **Colunas adicionadas:** `customer_addresses.uuid` (rotas do cliente usam uuid),
   `cart_items.last_seen_unit_price_cents` (aviso de preço alterado),
   `products.specifications jsonb` (tabela de especificações técnicas).
+
+## ADR-029 — `PostalCodeLookup` no kernel compartilhado
+
+A interface `PostalCodeLookup` (e seu DTO de resultado) fica em
+`app/Shared/PostalCode/` (namespace `App\Shared\PostalCode`), pois Customers
+(endereços) e Shipping precisam dela e Customers não pode depender de Shipping.
+A implementação ViaCEP + cache + fallback CEP→UF permanece no módulo Shipping,
+que faz o binding no seu ServiceProvider.
+
+## ADR-030 — Peso logístico de produtos por m²
+
+O peso usado no frete para `SQUARE_METER` é calculado sobre a **área real**
+(`stock_quantity`, sem área mínima faturável), pois representa o material físico
+enviado. A área mínima afeta só o preço.
+
+## ADR-031 — Correções do seed
+
+- A promoção "Semana do Vinil" **não** pode ter como alvo a categoria `vinis`
+  inteira; deve mirar produtos específicos que não sejam
+  `vinil-adesivo-branco-122m`.
+- Permissões do papel `seller` e demais papéis seguem API.md §6.2.
+- Chave de expiração: `checkout.payment_expiry_minutes` (DATABASE.md) é a chave
+  canônica; API.md/UX que citem `pix_expiry_minutes` referem-se a ela.
+- Critério de aceite com o seed: vinil 5 m = R$ 79,50 + entrega própria
+  Blumenau R$ 20,00 = **R$ 99,50**.
