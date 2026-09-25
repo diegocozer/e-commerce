@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Payments\Models;
 
-use App\Shared\Casts\JsonObjectCast;
 use App\Modules\Payments\Enums\PaymentStatus;
 use App\Modules\Payments\Enums\PaymentTransactionType;
+use App\Shared\Casts\JsonObjectCast;
 use Database\Factories\Payments\PaymentTransactionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;

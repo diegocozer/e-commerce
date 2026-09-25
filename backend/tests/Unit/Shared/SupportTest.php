@@ -6,6 +6,7 @@ namespace Tests\Unit\Shared;
 
 use App\Shared\Audit\AuditEntry;
 use App\Shared\Domain\ActorRef;
+use App\Shared\Domain\ActorType;
 use App\Shared\Domain\Exceptions\InvalidValue;
 use App\Shared\Support\HtmlSanitizer;
 use App\Shared\Support\Mask;
@@ -81,6 +82,6 @@ final class SupportTest extends TestCase
         self::assertSame(['price' => 2], $entry->newValues);
 
         $this->expectException(InvalidValue::class);
-        ActorRef::of(\App\Shared\Domain\ActorType::System, 3);
+        ActorRef::of(ActorType::System, 3);
     }
 }

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Catalog\Models;
 
-use App\Shared\Casts\JsonObjectCast;
 use App\Modules\Inventory\Models\Inventory;
 use App\Modules\Pricing\Models\CustomerPrice;
 use App\Modules\Pricing\Models\PriceTier;
+use App\Shared\Casts\JsonObjectCast;
 use Database\Factories\Catalog\ProductVariantFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

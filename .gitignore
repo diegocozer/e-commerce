@@ -1,0 +1,22 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+storefront/dist/
+admin/dist/
+coverage/
+playwright-report/
+test-results/
+
+# Logs
+*.log

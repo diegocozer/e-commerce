@@ -18,8 +18,8 @@ declare module '@mui/material/styles' {
     total: CSSProperties;
   }
   interface TypographyVariantsOptions {
-    price?: CSSProperties;
-    total?: CSSProperties;
+    price?: CSSProperties & Record<string, unknown>;
+    total?: CSSProperties & Record<string, unknown>;
   }
 }
 

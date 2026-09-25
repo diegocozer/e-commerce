@@ -1,0 +1,123 @@
+name: CI
+
+on:
+    pull_request:
+    push:
+        branches: [main]
+
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+jobs:
+    backend:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: backend
+        services:
+            postgres:
+                image: postgres:16
+                env:
+                    POSTGRES_DB: ecommerce_test
+                    POSTGRES_USER: ecommerce
+                    POSTGRES_PASSWORD: secret
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U ecommerce"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 10
+        env:
+            DB_CONNECTION: pgsql
+            DB_HOST: 127.0.0.1
+            DB_PORT: 5432
+            DB_DATABASE: ecommerce_test
+            DB_USERNAME: ecommerce
+            DB_PASSWORD: secret
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: "8.4"
+                  extensions: pdo_pgsql, pgsql, redis, intl, gd, zip, bcmath, pcntl
+                  coverage: none
+                  tools: composer:v2
+
+            - name: Cache Composer
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cache/composer
+                  key: composer-${{ hashFiles('backend/composer.lock') }}
+                  restore-keys: composer-
+
+            - run: composer install --no-interaction --prefer-dist --no-progress
+
+            - name: Composer audit
+              run: composer audit
+
+            - name: Code style (Pint)
+              run: vendor/bin/pint --test
+
+            - name: Prepare environment
+              run: |
+                  cp .env.example .env
+                  php artisan key:generate
+
+            - name: Migrate and seed
+              run: php artisan migrate:fresh --seed --force
+
+            - name: Tests (PHPUnit, includes the module architecture test)
+              run: php artisan test --log-junit junit.xml
+
+            - name: Upload JUnit report
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: backend-junit
+                  path: backend/junit.xml
+
+    frontend:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                app: [storefront, admin]
+        defaults:
+            run:
+                working-directory: ${{ matrix.app }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+                  cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
+            - run: npm ci
+            - run: npm audit --audit-level=high --omit=dev
+            - run: npm run lint
+            - run: npm run typecheck
+            - run: npm run test
+            - run: npm run build
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.app }}-dist
+                  path: ${{ matrix.app }}/dist
+
+    security:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - uses: gitleaks/gitleaks-action@v2
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

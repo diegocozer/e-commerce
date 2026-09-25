@@ -31,7 +31,7 @@ enum AdminRole: string
         };
     }
 
-    /** @return list<AdminPermission> permissions assigned explicitly by the seeder */
+    /** @return list<P> permissions assigned explicitly by the seeder */
     public function permissions(): array
     {
         return match ($this) {
