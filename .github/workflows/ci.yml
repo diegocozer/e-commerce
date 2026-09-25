@@ -39,6 +39,10 @@ jobs:
             DB_DATABASE: ecommerce_test
             DB_USERNAME: ecommerce
             DB_PASSWORD: secret
+            CACHE_STORE: array
+            SESSION_DRIVER: array
+            QUEUE_CONNECTION: sync
+            MAIL_MAILER: array
         steps:
             - uses: actions/checkout@v4
 

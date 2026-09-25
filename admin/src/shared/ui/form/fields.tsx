@@ -111,7 +111,7 @@ export function RHFSwitch<T extends FieldValues>({ control, name, label, disable
       render={({ field, fieldState }) => (
         <div>
           <FormControlLabel
-            control={<Switch checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} inputRef={field.ref} disabled={disabled} />}
+            control={<Switch checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} slotProps={{ input: { ref: field.ref } }} disabled={disabled} />}
             label={label}
           />
           {(fieldState.error || helperText) && <FormHelperText error={!!fieldState.error}>{fieldState.error?.message ?? helperText}</FormHelperText>}
@@ -129,7 +129,7 @@ export function RHFCheckbox<T extends FieldValues>({ control, name, label, disab
       render={({ field, fieldState }) => (
         <div>
           <FormControlLabel
-            control={<Checkbox checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} inputRef={field.ref} disabled={disabled} />}
+            control={<Checkbox checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} slotProps={{ input: { ref: field.ref } }} disabled={disabled} />}
             label={label}
           />
           {(fieldState.error || helperText) && <FormHelperText error={!!fieldState.error}>{fieldState.error?.message ?? helperText}</FormHelperText>}

@@ -11,7 +11,7 @@ import LabelIcon from '@mui/icons-material/LabelOutlined';
 import LocalOfferIcon from '@mui/icons-material/LocalOfferOutlined';
 import LocalShippingIcon from '@mui/icons-material/LocalShippingOutlined';
 import MapIcon from '@mui/icons-material/MapOutlined';
-import PeopleIcon from '@mui/icons-material/PeopleOutline';
+import PeopleIcon from '@mui/icons-material/PeopleAltOutlined';
 import PercentIcon from '@mui/icons-material/PercentOutlined';
 import PriceChangeIcon from '@mui/icons-material/PriceChangeOutlined';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLongOutlined';
