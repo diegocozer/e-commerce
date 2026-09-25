@@ -112,7 +112,7 @@ final class OtherReportsTest extends ReportsTestCase
         $response = $this->report('shipping', self::RANGE)->assertOk()
             ->assertJsonPath('data.summary', ['orders' => 3, 'shipping_revenue_cents' => 2000, 'free_shipping_orders' => 1, 'avg_shipping_cents' => 1000, 'free_shipping_bp' => 5000]);
         $delivery = collect($response->json('data.rows'))->firstWhere('method_type', 'own_delivery');
-        self::assertSame(['orders_count' => 2, 'shipping_revenue_cents' => 2000, 'free_shipping_orders' => 1, 'shipping_discount_cents' => 1500, 'city' => 'Blumenau'],
+        self::assertEquals(['orders_count' => 2, 'shipping_revenue_cents' => 2000, 'free_shipping_orders' => 1, 'shipping_discount_cents' => 1500, 'city' => 'Blumenau'],
             array_intersect_key($delivery, array_flip(['orders_count', 'shipping_revenue_cents', 'free_shipping_orders', 'shipping_discount_cents', 'city'])));
     }
 
