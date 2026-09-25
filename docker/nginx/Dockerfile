@@ -16,7 +16,7 @@ RUN npm ci
 COPY admin/ ./
 RUN npm run build
 
-FROM nginx:1.27-alpine AS production
+FROM nginx:1.29-alpine AS production
 COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY docker/nginx/snippets/ /etc/nginx/snippets/
 COPY --from=storefront /build/dist /var/www/storefront
