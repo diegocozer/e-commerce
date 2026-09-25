@@ -390,6 +390,8 @@ Carrinho → Identificação → Endereço → Frete → Pagamento → Revisão 
 
 #### 4.4.2 Exemplo passo a passo (variante VIN-BR-122, vinil em metros)
 
+> Ilustrativo (ver ADR-028): no seed a variante é `VIN-BR-122-BR` com `on_hand` inicial 500 m.
+
 | Passo | Evento | Movimento | on_hand | reserved | disponível |
 |---|---|---|---|---|---|
 | 0 | Saldo inicial | — | 100,000 | 0,000 | 100,000 |
@@ -516,7 +518,7 @@ Promoções (preço) estão em RN-PRC-007. Esta seção trata de **cupons** (ní
 | RN-CLI-001 | Tipos: `individual` (PF) e `company` (PJ). PJ cria `customers` + `companies` (`customers.company_id`) (ADR-006). |
 | RN-CLI-002 | **CPF** válido: 11 dígitos, dígitos verificadores corretos (módulo 11), rejeitar sequências repetidas (000.000.000-00 … 999.999.999-99). Armazenado só com dígitos; exibido mascarado `***.456.789-**` fora da área do próprio cliente. |
 | RN-CLI-003 | **CNPJ** válido: 14 dígitos, dígitos verificadores corretos, rejeitar sequências repetidas. (CNPJ alfanumérico — vigente a partir de 07/2026 — deve ser aceito: ver Q-13.) |
-| RN-CLI-004 | Unicidade: **e-mail** único entre clientes; **CPF** único entre clientes PF; **CNPJ** único entre empresas. Mensagem genérica em caso de duplicidade na tela de cadastro para evitar enumeração ("Não foi possível concluir o cadastro. Se você já tem conta, faça login ou recupere a senha."). |
+| RN-CLI-004 | Unicidade: **e-mail** único entre clientes; **CPF** único entre clientes PF; **CNPJ** único entre empresas. Mensagem genérica em caso de duplicidade na tela de cadastro para evitar enumeração ("Não foi possível concluir o cadastro. Se você já tem conta, faça login ou recupere a senha."). **Substituído (API.md D-19, ver ADR-028):** a API retorna mensagem **por campo** (`errors.email` "Já existe uma conta com este e-mail."), mitigada por rate limit. |
 | RN-CLI-005 | CPF/CNPJ **não podem ser alterados pelo cliente** após cadastro (vínculo fiscal). Correção somente por gerente, se não houver pedido pago, com auditoria. |
 | RN-CLI-006 | **IE**: aceita "ISENTO" (case-insensitive, armazenado `ISENTO`) ou 2–14 dígitos. Validação de dígito por UF fica fora do MVP. |
 | RN-CLI-007 | Troca de tipo PF ↔ PJ não é self-service. Gerente pode converter se o cliente **não tiver pedidos**; caso contrário, cria-se nova conta (outro e-mail). |
@@ -843,7 +845,7 @@ UTC — ADR-013); valores em centavos exibidos em BRL; exportação CSV.
 | EC-012 | CEP não atendido por entrega/tabela | Só retirada; se retirada inativa, "Não entregamos neste CEP". | RN-FRT-006 |
 | EC-013 | CEP inexistente ou ViaCEP fora do ar | "CEP não encontrado" / "Serviço indisponível, tente novamente"; não permite prosseguir sem cidade. | RN-CLI-022 |
 | EC-014 | Peso acima de todas as faixas da tabela | Método não ofertado; "Frete sob consulta" + retirada. | RN-FRT-005 |
-| EC-015 | Cupom expira durante o checkout | Revalidado no `POST /checkout` → 422 "Cupom expirado"; cliente vê total sem desconto e reconfirma. | RN-CUP-012 |
+| EC-015 | Cupom expira durante o checkout | Revalidado no `POST /checkout` → **409 `coupon_invalid`** com resumo sem desconto (ver ADR-028); cliente reconfirma. | RN-CUP-012 |
 | EC-016 | Cupom atinge limite total por pedidos simultâneos | Lock na linha do cupom; o que excede recebe 422. | RN-CUP-005 |
 | EC-017 | Cupom fixo maior que o subtotal | Desconto limitado ao subtotal; total = frete. | RN-CUP-009 |
 | EC-018 | Tentativa de aplicar dois cupons | Segundo substitui o primeiro. | RN-CUP-006 |
@@ -865,7 +867,7 @@ UTC — ADR-013); valores em centavos exibidos em BRL; exportação CSV.
 | EC-034 | Cliente loga e o preço cai (tabela atacado) | Carrinho mostra novo preço com `price_source`. | RN-CAR-021 |
 | EC-035 | Promoção termina entre carrinho e checkout | Preço recalculado sobe; EC-001 se aplica. | RN-PRC-007 |
 | EC-036 | Valor pago no PIX diferente do total | Não aprova; alerta `finance`. | RN-PAG-006 |
-| EC-037 | Estorno falha no gateway ao cancelar pedido pago | Cancelamento não efetivado; erro ao operador; retry. | RN-PED-021 |
+| EC-037 | Estorno falha no gateway ao cancelar pedido pago | Cancelamento **efetivado**; estorno assíncrono com retry; falha definitiva vira alerta ao `finance` (ver ADR-028). | RN-PED-021 |
 | EC-038 | Tentativa de cancelar pedido já `shipped` | 409; orientar fluxo de devolução manual. | RN-PED-022 |
 | EC-039 | Cliente tenta acessar pedido de outro (troca de UUID/ID) | 404 (policy; não revelar existência). | ADR-012 |
 | EC-040 | Frontend envia `price`, `total`, `status`, `customer_id` | Campos ignorados/rejeitados; totais do servidor. | ADR-012 |
@@ -963,14 +965,15 @@ Checklist de aceitação de escopo (todos obrigatórios para o go-live):
 
 ## 9. Critérios de aceite — fluxo final de sucesso
 
-**Dados de seed do cenário:**
+**Dados de seed do cenário** (alinhados ao seed de DATABASE.md §7 — ver ADR-028; a
+promoção "Semana do Vinil" do seed **não** pode afetar este produto):
 
 | Item | Valor |
 |---|---|
-| Produto | "Vinil Adesivo Branco Brilho 1,22 m" — categoria Mídias › Vinis — `sale_unit = LINEAR_METER` |
-| Variante | SKU `VIN-BR-122`, `fixed_width_mm = 1220`, `min_quantity = 1`, `quantity_step = 0,1`, `max_quantity = 50`, preço base **R$ 15,90/m** (sem faixas aplicáveis a 5 m, sem promoção), `weight_g = 180`/m |
-| Estoque inicial | `on_hand = 100,000 m`, `reserved = 0` |
-| Frete | Retirada R$ 0,00; Entrega própria Blumenau R$ 15,00 (1 dia útil); frete grátis Blumenau acima de R$ 300,00 |
+| Produto | "Vinil Adesivo Branco" (`vinil-adesivo-branco-122m`) — categoria Vinis — `sale_unit = LINEAR_METER` |
+| Variante | SKU `VIN-BR-122-BR` (Brilho), `fixed_width_mm = 1220`, `min_quantity = 1`, `quantity_step = 0,1`, `max_quantity = 50`, preço base **R$ 15,90/m** (faixas só a partir de 10 m; sem promoção), `weight_grams = 250`/m |
+| Estoque inicial | `on_hand = 500,000 m`, `reserved = 0` |
+| Frete | Retirada R$ 0,00; Entrega própria Blumenau R$ 20,00 (1 dia útil); frete grátis (entrega própria) a partir de R$ 500,00 |
 | Cliente | Novo cliente PF, CEP 89010-000 (Blumenau/SC) |
 | Pagamento | Driver `sandbox` (PIX) |
 
@@ -980,22 +983,22 @@ Checklist de aceitação de escopo (todos obrigatórios para o go-live):
 |---|---|
 | CA-001 | **Dado** um visitante na loja, **quando** busca "vinil branco" (ou "VIN-BR"), **então** o produto aparece nos resultados com "R$ 15,90 /m" e selo "Em estoque". |
 | CA-002 | **Quando** abre o produto e informa **5** m, **então** vê "1,22 m × 5,00 m" e **Total R$ 79,50**; ao informar 5,05 vê erro de step com sugestões 5,00/5,10 e o botão "Adicionar" fica desabilitado. |
-| CA-003 | **Quando** informa CEP 89010-000 na página do produto, **então** vê "Retirar na loja — Grátis" e "Entrega própria Blumenau — R$ 15,00 — 1 dia útil". |
-| CA-004 | **Quando** adiciona ao carrinho como visitante, **então** o carrinho mostra 1 linha, 5,00 m, R$ 15,90/m, subtotal **R$ 79,50**, peso estimado 0,90 kg; o `X-Cart-Token` é persistido. |
+| CA-003 | **Quando** informa CEP 89010-000 na página do produto, **então** vê "Retirada na empresa — Grátis" e "Entrega própria — R$ 20,00 — 1 dia útil" (além das opções de tabela). |
+| CA-004 | **Quando** adiciona ao carrinho como visitante, **então** o carrinho mostra 1 linha, 5,00 m, R$ 15,90/m, subtotal **R$ 79,50**, peso estimado 1,25 kg; o `X-Cart-Token` é persistido. |
 | CA-005 | **Quando** clica em "Finalizar compra", **então** é levado a Entrar/Cadastrar; **quando** cadastra-se como PF com CPF válido e aceita os termos, **então** volta ao checkout com o carrinho mesclado (mesma linha, 5,00 m). CPF inválido é rejeitado com mensagem. |
 | CA-006 | **Quando** cadastra endereço com CEP 89010-000, **então** cidade "Blumenau", UF "SC" e IBGE 4202404 são preenchidos automaticamente; o endereço vira padrão. |
-| CA-007 | **Quando** escolhe "Entrega própria — R$ 15,00" e PIX, **então** a Revisão mostra: subtotal R$ 79,50, desconto R$ 0,00, frete R$ 15,00, **total R$ 94,50**, prazo "até 1 dia útil após a confirmação do pagamento". |
-| CA-008 | **Quando** clica "Finalizar pedido" (inclusive com duplo clique), **então** exatamente **um** pedido é criado, com número no formato `CV-000001`, status `pending_payment`, `payment_status = pending`, `total_cents = 9450`, e o carrinho fica vazio. |
-| CA-009 | **Então** o estoque da variante fica `on_hand = 100,000`, `reserved = 5,000` (disponível 95,000), com movimento `reserve` referenciando o pedido. |
-| CA-010 | **Então** a tela exibe QR Code PIX, copia e cola, valor R$ 94,50 e contador de 30 min; o cliente recebe e-mail "Pedido CV-000001 recebido". |
-| CA-011 | **Quando** o webhook assinado do sandbox aprova o pagamento, **então** o pedido vai para `paid`, `payment_status = approved`, estoque `on_hand = 95,000`, `reserved = 0` (movimento `out`), e cliente recebe e-mail "Pagamento confirmado". Reenviar o mesmo webhook **não** altera nada (200, sem novo movimento). |
-| CA-012 | **Dado** um operador `warehouse` logado no painel, **quando** abre "Pedidos a separar", **então** vê CV-000001 com item "VIN-BR-122 — 5,00 m (1,22 × 5,00 m)" e endereço de entrega. |
+| CA-007 | **Quando** escolhe "Entrega própria — R$ 20,00" e PIX, **então** a Revisão mostra: subtotal R$ 79,50, desconto R$ 0,00, frete R$ 20,00, **total R$ 99,50**, prazo "até 1 dia útil após a confirmação do pagamento". |
+| CA-008 | **Quando** clica "Finalizar pedido" (inclusive com duplo clique), **então** exatamente **um** pedido é criado, com número no formato `CV-000001`, status `pending_payment`, `payment_status = pending`, `total_cents = 9950`, e o carrinho fica vazio. |
+| CA-009 | **Então** o estoque da variante fica `on_hand = 500,000`, `reserved = 5,000` (disponível 495,000), com movimento `reserve` referenciando o pedido. |
+| CA-010 | **Então** a tela exibe QR Code PIX, copia e cola, valor R$ 99,50 e contador de 30 min; o cliente recebe e-mail "Pedido CV-000001 recebido". |
+| CA-011 | **Quando** o webhook assinado do sandbox aprova o pagamento, **então** o pedido vai para `paid`, `payment_status = approved`, estoque `on_hand = 495,000`, `reserved = 0` (movimento `out`), e cliente recebe e-mail "Pagamento confirmado". Reenviar o mesmo webhook **não** altera nada (200, sem novo movimento). |
+| CA-012 | **Dado** um operador `warehouse` logado no painel, **quando** abre "Pedidos a separar", **então** vê CV-000001 com item "VIN-BR-122-BR — 5,00 m (1,22 × 5,00 m)" e endereço de entrega. |
 | CA-013 | **Quando** clica "Iniciar separação", **então** status `processing`; **quando** "Saiu para entrega", `shipped`; **quando** "Confirmar entrega", `delivered`. Cada transição aparece em `order_status_history` com o operador e data, e o cliente recebe as notificações correspondentes. |
 | CA-014 | **Dado** um operador `seller`, **quando** tenta marcar o pedido como `shipped`, **então** recebe 403. Transição inválida (ex.: `delivered → processing`) retorna 409. |
-| CA-015 | **Dado** o cliente logado, **quando** acessa Minha conta → Pedidos → CV-000001, **então** vê itens, valores (R$ 79,50 + R$ 15,00 = R$ 94,50), endereço, e a **timeline** completa (Pedido recebido → Pagamento confirmado → Em separação → Saiu para entrega → Entregue) com datas. |
-| CA-016 | **Quando** clica "Comprar novamente", **então** o carrinho recebe 5,00 m de VIN-BR-122 com o preço atual. |
+| CA-015 | **Dado** o cliente logado, **quando** acessa Minha conta → Pedidos → CV-000001, **então** vê itens, valores (R$ 79,50 + R$ 20,00 = R$ 99,50), endereço, e a **timeline** completa (Pedido recebido → Pagamento confirmado → Em separação → Saiu para entrega → Entregue) com datas. |
+| CA-016 | **Quando** clica "Comprar novamente", **então** o carrinho recebe 5,00 m de VIN-BR-122-BR com o preço atual. |
 | CA-017 | **Dado** outro cliente autenticado, **quando** tenta acessar o UUID do pedido CV-000001, **então** recebe 404. |
-| CA-018 | **Relatórios**: o faturamento do dia inclui **R$ 94,50**, 1 pedido pago, ticket médio R$ 94,50; "Produtos mais vendidos" mostra VIN-BR-122 com 5,000 m e R$ 79,50. |
+| CA-018 | **Relatórios**: o faturamento do dia inclui **R$ 99,50**, 1 pedido pago, ticket médio R$ 99,50; "Produtos mais vendidos" mostra VIN-BR-122-BR com 5,000 m e R$ 79,50. |
 
 **Variante do fluxo (expiração)** — CA-019: **Dado** um pedido `pending_payment` não pago, **quando** passam 30 min, **então** o job o cancela (`payment_expired`), `payment_status = expired`, `reserved` volta ao valor anterior (movimento `release`) e o cliente recebe e-mail com "Comprar novamente".
 
