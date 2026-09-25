@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 
 /**
- * Named rate limiters of SECURITY.md §18 / ADR-006. Use them in routes with
+ * Named rate limiters of API.md §1.8 (SECURITY.md §18 / ADR-006). Use them in routes with
  * `->middleware('throttle:<name>')`. 429 responses are rendered as
  * {message, code: too_many_requests} with Retry-After.
  */
@@ -34,7 +34,8 @@ final class RateLimiters
 
         RateLimiter::for('catalog', static fn (Request $r) => Limit::perMinute(120)->by('catalog:'.$r->ip()));
         RateLimiter::for('search', static fn (Request $r) => Limit::perMinute(60)->by('search:'.$r->ip()));
-        RateLimiter::for('price-quote', static fn (Request $r) => Limit::perMinute(60)->by('price-quote:'.self::actorKey($r)));
+        RateLimiter::for('price-preview', static fn (Request $r) => Limit::perMinute(60)->by('price-preview:'.self::actorKey($r)));
+        RateLimiter::for('shipping-estimate', static fn (Request $r) => Limit::perMinute(30)->by('shipping-estimate:'.self::actorKey($r)));
         RateLimiter::for('cart', static fn (Request $r) => Limit::perMinute(60)->by('cart:'.self::cartKey($r)));
         RateLimiter::for('coupon', static fn (Request $r) => [
             Limit::perMinute(10)->by('coupon:'.self::actorKey($r)),
@@ -49,6 +50,7 @@ final class RateLimiters
         RateLimiter::for('customer', static fn (Request $r) => Limit::perMinute(60)->by('customer:'.self::actorKey($r)));
         RateLimiter::for('admin', static fn (Request $r) => Limit::perMinute(300)->by('admin:'.self::adminKey($r)));
         RateLimiter::for('admin-heavy', static fn (Request $r) => Limit::perMinute(10)->by('admin-heavy:'.self::adminKey($r)));
+        RateLimiter::for('admin-dashboard', static fn (Request $r) => Limit::perMinute(30)->by('admin-dashboard:'.self::adminKey($r)));
         RateLimiter::for('uploads', static fn (Request $r) => Limit::perMinute(30)->by('uploads:'.self::adminKey($r)));
         RateLimiter::for('webhooks', static fn (Request $r) => Limit::perMinute(300)->by('webhooks:'.$r->ip()));
         RateLimiter::for('health', static fn (Request $r) => Limit::perMinute(60)->by('health:'.$r->ip()));

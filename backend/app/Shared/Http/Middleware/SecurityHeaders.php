@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class SecurityHeaders
 {
     /** Private/authenticated areas are never cached. */
-    private const array NO_STORE_PATHS = ['api/v1/me', 'api/v1/me/*', 'api/v1/admin', 'api/v1/admin/*', 'api/v1/auth/*', 'api/v1/checkout*'];
+    private const array NO_STORE_PATHS = ['api/v1/me', 'api/v1/me/*', 'api/v1/admin', 'api/v1/admin/*', 'api/v1/auth/*', 'api/v1/checkout*', 'api/v1/cart', 'api/v1/cart/*'];
 
     public function handle(Request $request, Closure $next): Response
     {

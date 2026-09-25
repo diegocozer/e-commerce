@@ -770,7 +770,7 @@ Regras comuns (ADR-003/004):
 - Valores enviados à API como **string decimal** (`"5.5"`), nunca float calculado.
   O frontend pode **pré-visualizar** o total localmente com aritmética inteira
   (centavos × milésimos / 1000, arredondamento half-up) e, em paralelo, consulta a API
-  de preço (`POST /api/v1/products/{id}/quote` ou equivalente) com debounce 300 ms; o
+  de preço (`POST /api/v1/products/{slug}/price-preview`, API.md §3.A — ver ADR-028) com debounce 300 ms; o
   valor da API substitui a prévia. Divergência → vale a API.
 - Respeitar `min_quantity`, `max_quantity`, `quantity_step`; valor inválido é
   **corrigido no blur** para o múltiplo válido mais próximo (arredonda para cima) com
@@ -864,10 +864,12 @@ Total: R$ 90,00
   ("Usar cm") — **fora do MVP**.
 - **Área ao vivo**: `Área: 3,00 m²` sempre com 2 casas; texto secundário com a
   fórmula `1,20 m × 2,50 m × 1 peça`.
-- **Área mínima faturável** (`min_billable_area`): se a área calculada for menor, exibir
-  Alert info abaixo da área:
-  `Área calculada 0,60 m². Cobramos a área mínima de 1,00 m² por pedido deste material.`
-  e a conta usa a área faturada: `1,00 m² (mínimo) × R$ 30,00 = R$ 30,00`.
+- **Área mínima faturável** (`min_billable_area`): aplicada **por peça** (ver ADR-019). Se a
+  área de uma peça for menor, exibir Alert info abaixo da área:
+  `Área por peça 0,60 m². Cobramos a área mínima de 1,00 m² por peça deste material.`
+  e a conta usa a área faturada: `1,00 m² (mínimo) × 1 peça × R$ 30,00 = R$ 30,00`
+  (com 3 peças: `3,00 m² faturados`). Os valores exibidos vêm de `area_m2`/
+  `min_area_applied` da prévia de preço, nunca de cálculo local.
 - Campos vazios → área "—" e CTA desabilitado com "Informe a altura".
 - O estoque é em m² (ADR-004): se a área total excede o disponível, "Disponível: 25,00 m²".
 
@@ -919,7 +921,7 @@ Frete calculado para 5 m (1,2 kg). Valores finais no checkout.
 - Recalcula ao mudar quantidade (debounce 600 ms) somente se já houver cotação
   exibida. Opções ordenadas por preço; "Grátis" em `success.main`.
 - CEP inválido (formato): "CEP inválido. Use 8 dígitos, ex.: 89010-000".
-  CEP inexistente (API 422): "Não encontramos esse CEP."
+  CEP inexistente (`GET /postal-codes/{cep}` → 404 `not_found`; ao salvar endereço → 422 `errors.postal_code`): "Não encontramos esse CEP."
   Sem opções: "Não entregamos neste CEP. Retirada disponível em Blumenau/SC." (se
   retirada existir) ou "Fale conosco no WhatsApp".
 - Erro/timeout: "Não foi possível calcular o frete agora." [Tentar novamente].
@@ -1225,7 +1227,12 @@ TOTAL                                      R$ 172,55
   retorna o mesmo pedido se já criado. Falhando, botão "Tentar novamente" (mesma chave).
 - **201/200** → navega (`replace`) para `/checkout/pedido/{uuid}`; invalida query do
   carrinho e do badge.
-- **409 (conflito)** → Dialog **não fechável por clique fora**, título "Algumas
+- **409 (conflito)** → tratado por `code` (API.md §1.6/§3.E — ver ADR-028):
+  `price_changed` (`summary`), `insufficient_stock` (`items`), `shipping_*` (nova
+  `shipping_quote`), `coupon_invalid` (`coupon` + `summary` sem desconto),
+  `too_many_pending_orders` (link para os pedidos pendentes), `cart_empty` (volta ao
+  carrinho), `idempotency_conflict` (gera nova chave e revisa). Para os de preço/estoque/
+  frete/cupom: Dialog **não fechável por clique fora**, título "Algumas
   informações mudaram", com a lista do que mudou (a API envia o detalhe):
   - Preço: "Vinil Adesivo Branco: R$ 15,90 → R$ 16,50 /m"
   - Estoque: "Lona Frontlight: disponível 2,00 m² (você pediu 3,00 m²)"
@@ -1234,7 +1241,10 @@ TOTAL                                      R$ 172,55
   - Ações: se só preço/frete mudou → [Revisar e confirmar] (fecha o dialog, atualiza
     a Revisão com os novos valores destacados em `warning.light` e **nova**
     idempotency key). Se estoque mudou → [Voltar ao carrinho].
-- **422** → volta ao passo com o campo problemático e mostra a mensagem.
+- **422** → volta ao passo com o campo problemático e mostra a mensagem (`cart_invalid` →
+  volta ao carrinho com as linhas marcadas).
+- **503 `payment_gateway_unavailable`** → pedido já criado: repete o mesmo request (mesma
+  chave, backoff 2 s/4 s); persistindo, leva a `/checkout/pedido/{uuid}` com "Gerar PIX novamente".
 - **429** → "Muitas tentativas. Aguarde um minuto e tente novamente."
 - **401** (sessão expirou) → §6.8; após login volta à Revisão com a mesma chave.
 
@@ -1712,7 +1722,7 @@ Editar produto: Vinil Adesivo Branco            [Descartar] [Salvar]  ← sticky
 - Botão "Salvar" habilitado só se sujo e não enviando; Ctrl+S salva.
 - **Feedback:** sucesso → snackbar "Produto salvo" e formulário resetado com os dados
   retornados; criação → redireciona para a edição do novo registro.
-- **Conflito de edição** (409 / `updated_at` divergente, se o backend suportar):
+- **Conflito de edição** (409 `stale_resource`, enviando `expected_updated_at` nos `PATCH` — API.md §1.9):
   "Este registro foi alterado por outra pessoa. [Recarregar] (suas alterações serão
   perdidas) [Ver diferenças]".
 - Campos monetários: input BRL com máscara (`R$ 1.234,56`), enviado em **centavos
@@ -1997,7 +2007,7 @@ Destino: Blumenau/SC (IBGE 4202404) · Zonas: Blumenau, SC
 
 - **Usuários:** nome, e-mail, papel(éis), último acesso, status. Convidar (e-mail com
   link para definir senha), desativar (não excluir), redefinir senha. Não permitir
-  desativar a si mesmo nem remover o último "Administrador".
+  desativar a si mesmo nem remover o último "Super Admin" (`super-admin`).
 - **Papéis e matriz de permissões:**
 
 ```text
@@ -2015,14 +2025,15 @@ Papel: [Estoque/Expedição ▾]                                     [Salvar]  [
 ```
 
 - Linha/coluna com "marcar todos"; "Editar" implica "Ver" (marca automaticamente).
-- Papéis do MVP (BUSINESS_RULES.md §2.2), exibidos em pt-BR: **Administrador**
-  (`admin`, tudo, não editável), **Vendas** (`seller`), **Estoque/Expedição**
-  (`warehouse`), **Financeiro** (`finance`). Papéis adicionais podem ser criados
-  ("Duplicar papel").
+- Papéis do seed (ver ADR-023/027 e API.md §6.2), exibidos em pt-BR: **Super Admin**
+  (`super-admin`, tudo, não editável), **Gerente** (`manager`, tudo exceto usuários/papéis),
+  **Vendedor** (`seller`), **Estoque/Expedição** (`warehouse`), **Financeiro** (`finance`).
+  Papéis adicionais podem ser criados ("Duplicar papel"); a matriz acima é ilustrativa — as
+  caixas correspondem às permissões reais de API.md §6.1 (lidas de `GET /admin/permissions`).
 
 **UI sensível a permissões (vale para todo o painel):**
 
-- O endpoint `GET /api/v1/admin/me` retorna as permissões; hook `useCan('orders.cancel')`.
+- O endpoint `GET /api/v1/admin/me` retorna as permissões; hook `useCan('orders.cancel_paid')` (nomes em API.md §6.1).
 - Sem permissão de **ver** → item de menu e rota ocultos (acesso direto à URL → página
   403 "Você não tem acesso a esta área. Fale com o administrador.").
 - Sem permissão de **agir** → o botão **não é renderizado** (não apenas desabilitado);
@@ -2364,7 +2375,7 @@ flowchart TD
 flowchart TD
     A[Dashboard: card Para separar] --> B[Lista de pedidos<br/>filtro status = Pago]
     B --> C[Detalhe do pedido]
-    C --> D{Permissão orders.update_status?}
+    C --> D{Permissão orders.fulfill?}
     D -- não --> D1[Somente leitura<br/>ações ocultas]
     D -- sim --> E[Marcar em separação]
     E --> F[Separar itens conforme instruções<br/>Separar 5 m · Cortar 4 peças 1,20×2,50]

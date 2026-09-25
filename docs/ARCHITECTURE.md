@@ -134,7 +134,7 @@ flowchart TB
 | Notifications | **Mantido (camada de topo)** | Só consome eventos; ninguém depende dele. E-mail + canal WhatsApp stub. |
 | **Checkout** (novo) | **Criado — orquestrador sem tabelas** | O checkout toca Cart, Pricing, Shipping, Inventory, Orders e Payments. Colocá-lo em Orders faria Orders depender de tudo e criaria ciclos (Cart → Orders → Cart). Checkout fica no topo do grafo e é o único a coordenar a transação de compra. |
 | **Audit** (novo) | **Criado** | `audit_logs` imutável (ADR-016). O **contrato** `AuditLogger` fica em `Shared` para que qualquer módulo registre auditoria sem criar ciclo; a implementação e as telas de consulta ficam em `Audit`. |
-| **Seo** (novo) | **Criado** | Sitemap, robots, shell com meta/JSON-LD (ADR-015) e redirects 301 de slugs alterados (`url_redirects`). Depende só de Catalog/Settings. |
+| **Seo** (novo) | **Criado** | Sitemap, robots, shell com meta/JSON-LD (ADR-015). Redirects 301 de slugs alterados (`url_redirects`) **adiados** (ver ADR-026). Depende só de Catalog/Settings. |
 | **Settings** (novo) | **Criado** | Configurações editáveis no painel (expiração PIX, limiar de estoque baixo, dados da loja, endereço de retirada, WhatsApp on/off). Pequeno, na base do grafo. |
 | **Shared** (kernel) | **Criado — não é bounded context** | Value objects (`Money`, `Quantity`, `Dimensions`, `Weight`, `PackageDimensions`, `PostalCode`, `TaxDocument`), contrato de auditoria, middleware `RequestId`, exceções base, helpers de mascaramento. Sem tabelas, sem rotas. |
 
@@ -154,8 +154,13 @@ flowchart TB
 3. Consumir um evento de outro módulo conta como dependência (importa a classe).
 4. `Reports` pode ler (somente SELECT) tabelas de qualquer módulo que ele referencia.
 5. Todos dependem de `Shared` (arestas omitidas no grafo).
-6. Verificação automática: **deptrac** (`backend/deptrac.yaml`) no CI — camadas = módulos,
-   regras = grafo 2.5. 🔧 Proposta ADR (ferramenta nova no CI).
+6. Verificação automática: **teste de arquitetura em PHPUnit** (`tests/Architecture`, varre os
+   `use` statements de `app/Modules/*` e falha em aresta fora do grafo 2.5) — deptrac fica
+   para depois do MVP (ver ADR-018/ADR-026).
+7. Quando um módulo inferior precisa de dados de um superior, o inferior define o contrato
+   em `Contracts/` e o superior o implementa (inversão): `Customers\Contracts\CustomerStatsProvider`
+   (implementado por Orders), `Inventory\Contracts\VariantLabelProvider` (por Catalog),
+   `Inventory\Contracts\MovementReferenceResolver` (por Orders) — ver API.md §5 (ADR-028).
 
 ### 2.4 Detalhamento por módulo
 
@@ -237,10 +242,10 @@ abstract class DomainException extends \RuntimeException {   // renderizada como
 
 - **Http:** `RequestId`, `ForceJsonResponse`, `EnsureAdminSessionIsFresh` (ver SECURITY.md).
 - **Logging:** `RedactSensitiveDataProcessor` (Monolog), `JsonFormatter` configurado.
-- **Nota ADR-003 🔧:** `width_mm × height_mm × pieces / 1000` só é inteiro quando o
-  produto é múltiplo de 1000 (ex.: 1225 mm × 1001 mm não é). Proposta:
-  `area_milli = round_half_up(width_mm × height_mm × pieces, 1000)` via `Rounding::halfUpDiv`,
-  aplicado **antes** de comparar com `min_billable_area`.
+- **Área (ver ADR-019, substitui a proposta anterior):** área **por peça** em milésimos de m²
+  = `round_half_up(width_mm × height_mm / 1000)` via `Rounding::halfUpDiv`; área mínima
+  aplicada **por peça**: `billable = max(piece_area, min_billable_area) × pieces`;
+  `stock_quantity` (baixa de estoque) = `piece_area × pieces`, sem área mínima.
 
 #### Settings
 
@@ -249,10 +254,12 @@ abstract class DomainException extends \RuntimeException {   // renderizada como
 - **Contratos:**
 
 ```php
-enum SettingKey: string { case StoreName = 'store.name'; case StoreContactEmail = 'store.contact_email';
-    case PixExpirationMinutes = 'orders.pix_expiration_minutes'; case LowStockDefaultThreshold = 'inventory.low_stock_default_threshold';
-    case PickupAddress = 'shipping.pickup_address'; case WhatsAppEnabled = 'notifications.whatsapp_enabled';
-    case AdminAlertEmails = 'notifications.admin_alert_emails'; /* ... */ }
+// Chaves conforme API.md §3.G.13 / seed DATABASE §7.1 (ver ADR-028). Endereço de retirada NÃO é
+// setting: vem das colunas pickup_* do método de frete `pickup` (SHIPPING §9).
+enum SettingKey: string { case StoreName = 'store.name'; case StoreEmail = 'store.email';
+    case PixExpiryMinutes = 'checkout.pix_expiry_minutes'; case LowStockDefaultThreshold = 'inventory.default_low_stock_threshold';
+    case StoreAddress = 'store.address'; case WhatsAppEnabled = 'notifications.whatsapp_enabled';
+    case AdminAlertEmails = 'notifications.admin_alert_emails'; /* ... lista completa em API.md §3.G.13 */ }
 interface SettingsRepository {
     public function get(SettingKey $key): mixed;              // default vindo do enum
     public function set(SettingKey $key, mixed $value, ActorRef $actor): void;
@@ -271,9 +278,9 @@ interface SettingsRepository {
 - **Contratos:**
 
 ```php
-enum Permission: string { case ProductsView = 'products.view'; /* lista completa em SECURITY.md §4.2 */ }
-enum Role: string { case SuperAdmin = 'super_admin'; case Manager = 'manager'; case Sales = 'sales';
-    case Catalog = 'catalog'; case Stock = 'stock'; case Finance = 'finance'; case Viewer = 'viewer'; }
+enum Permission: string { case ProductsView = 'products.view'; /* lista completa em API.md §6.1 (ver ADR-023/028) */ }
+enum Role: string { case SuperAdmin = 'super-admin'; case Manager = 'manager'; case Seller = 'seller';
+    case Warehouse = 'warehouse'; case Finance = 'finance'; }   // ADR-023/027; atribuição em API.md §6.2
 interface AdminUserDirectory {
     public function find(int $adminUserId): ?AdminUserData;
     /** @return list<string> e-mails de admins ativos com a permissão */
@@ -360,11 +367,12 @@ final readonly class PricingSubject { /* int $variantId, int $productId, ?int $b
     list<int> $categoryIdsWithAncestors, Money $basePrice, ?Money $promotionalPrice,
     ?CarbonImmutable $promoStartsAt, ?CarbonImmutable $promoEndsAt */ }
 final readonly class PriceContext { /* PricingSubject $subject, Quantity $billableQuantity,
+    ?Quantity $tierQuantity (soma da variante no carrinho — ADR-019; null = billableQuantity),
     ?int $customerId, CarbonImmutable $at */ }
 final readonly class PriceQuote { /* int $variantId, Money $unitPrice, Money $baseUnitPrice,
     Money $lineTotal, Quantity $billableQuantity, PriceSource $source, ?int $promotionId */ }
 enum PriceSource: string { case Base='base'; case Tier='tier'; case PriceList='price_list';
-    case Promotional='promotional'; case Promotion='promotion'; case Customer='customer'; }
+    case VariantPromo='variant_promo'; case Promotion='promotion'; case CustomerPrice='customer_price'; } // ver ADR-028
 
 interface PriceResolver {
     public function resolve(PriceContext $ctx): PriceQuote;
@@ -397,8 +405,7 @@ final readonly class CouponEvaluation { /* bool $valid, ?string $reasonCode, Mon
 interface CatalogQuery {
     public function variant(int $variantId): ?VariantData;          // inclui sale_unit, regras, peso, embalagem
     /** @param list<int> $variantIds @return array<int, VariantData> */
-    public function variants(array $variantIds): array;
-    public function variantByUuid(string $uuid): ?VariantData;
+    public function variants(array $variantIds): array;   // variantes são referenciadas por id inteiro (sem uuid — ADR-028/API.md D-05)
     public function pricingSubject(int $variantId): PricingSubject;  // monta DTO do Pricing
     /** @return array<int, PricingSubject> */
     public function pricingSubjects(array $variantIds): array;
@@ -553,14 +560,15 @@ final readonly class PlaceOrderData { /* int $customerId, string $idempotencyKey
 
 - **Responsabilidade:** único caso de uso "fechar pedido": idempotência, revalidação
   completa (preço, cupom, frete, estoque), transação, criação do pagamento e resposta PIX.
-  Também oferece prévia (`POST /api/v1/me/checkout/preview`) sem efeitos colaterais.
+  Também oferece prévia (`POST /api/v1/checkout/preview`) sem efeitos colaterais (paths em API.md §3.E — ADR-028).
 - **Tabelas:** nenhuma (usa `orders.idempotency_key` via Orders).
 
 ```php
 final class PlaceCheckout { public function execute(CheckoutData $data): CheckoutResult; }
 final class PreviewCheckout { public function execute(CheckoutData $data): CheckoutTotals; }
-final readonly class CheckoutData { /* int $customerId, string $idempotencyKey, string $shippingAddressUuid,
-    string $shippingQuoteId, string $shippingOptionId, PaymentMethod $paymentMethod, ?string $couponCode, ?string $notes */ }
+final readonly class CheckoutData { /* int $customerId, string $idempotencyKey, string $addressUuid,
+    string $shippingQuoteId, string $shippingOptionId, PaymentMethod $paymentMethod, int $expectedTotalCents,
+    ?string $notes */ }   // cupom vem do carrinho, não do corpo (API.md §3.E)
 final readonly class CheckoutResult { /* OrderData $order, PaymentData $payment, bool $replayed */ }
 ```
 
@@ -583,22 +591,24 @@ final readonly class CheckoutResult { /* OrderData $order, PaymentData $payment,
 
 - **Responsabilidade:** dashboards e relatórios do painel (vendas por período, pedidos por
   status, produtos mais vendidos, estoque baixo/valorizado, clientes). Exportação CSV
-  assíncrona para `s3 private/exports/` com URL temporária (15 min).
+  **síncrona** (download direto, ≤ 50 000 linhas) em `GET /admin/reports/{report}?format=csv`
+  (API.md §3.G.15, decisão A-15 — substitui o export assíncrono).
 - **Tabelas:** nenhuma (read models via SQL). Futuro: views materializadas / réplica.
 - **Contratos:** `SalesSummaryReport::run(ReportPeriod $p): SalesSummary`, `TopProductsReport`,
-  `OrdersByStatusReport`, `InventoryValuationReport`, `ExportReportJob`.
+  `OrdersByStatusReport`, `InventoryValuationReport`, `CsvReportWriter`.
 - **Emite/Consome:** —. **Depende de:** Orders, Payments, Catalog, Customers, Inventory.
 
 #### Seo
 
 - **Responsabilidade:** `/sitemap.xml` (cache 6 h), `/robots.txt`, rota *shell* que injeta
   `<title>`, meta description, canonical, OG e JSON-LD (Product, BreadcrumbList) no
-  `index.html` da loja, redirects 301 para slugs antigos, resolução de slugs reservados.
-- **Tabelas:** `url_redirects` (`from_path` único, `to_path`, `status_code`).
+  `index.html` da loja, 301 para a categoria canônica do produto, resolução de slugs reservados.
+  Redirects de slugs antigos (`url_redirects`) fora do MVP (ver ADR-026).
+- **Tabelas:** nenhuma no MVP.
 - **Contratos:** `SeoMetaBuilder::forProduct(ProductSeoData): SeoMeta`, `forCategory(...)`,
   `ShellRenderer::render(SeoMeta $meta, int $status): Response`.
-- **Consome:** `ProductSlugChanged` → `CreateRedirect` (síncrono); `ProductSaved`,
-  `ProductDeleted`, `CategoryTreeChanged` → `ForgetSitemapCache` (queued).
+- **Consome:** `ProductSaved`, `ProductDeleted`, `CategoryTreeChanged` → `ForgetSitemapCache`
+  (queued). (`ProductSlugChanged` → `CreateRedirect` adiado com `url_redirects` — ADR-026.)
 - **Depende de:** Catalog, Settings.
 
 ### 2.5 Grafo de dependências (acíclico)
@@ -704,6 +714,7 @@ backend/
 │   │           ├── admin.php               # opcional
 │   │           ├── admin_guest.php         # só Identity (login/esqueci senha do painel)
 │   │           ├── webhooks.php            # só Payments
+│   │           ├── dev.php                 # só Payments; carregado apenas em local/testing (API.md §3.F)
 │   │           └── web.php                 # só Seo (sitemap, robots, shell)
 │   ├── Shared/
 │   │   ├── Domain/                         # Money, Quantity, Dimensions, Weight, PackageDimensions,
@@ -723,11 +734,11 @@ backend/
 ├── database/migrations/                    # timeline ÚNICA (prefixo de data)
 ├── database/seeders/                       # PermissionSeeder, DemoCatalogSeeder...
 ├── database/factories/                     # por model (namespace Database\Factories\<Module>)
-├── deptrac.yaml
 └── tests/
     ├── Unit/<Module>/                      # VOs, resolvers, state machine (sem HTTP)
     ├── Feature/<Module>/                   # HTTP + banco Postgres real
     ├── Feature/Security/                   # checklist de SECURITY.md §22
+    ├── Architecture/                       # grafo de módulos (ADR-018), $fillable, rotas admin com permissão
     └── Fakes/                              # FakePaymentGateway, FakeCarrier, FakePostalCodeLookup
 ```
 
@@ -821,9 +832,9 @@ Configuração em `bootstrap/app.php`:
 - `->withExceptions(...)`: `DomainException` → `{message, code}` com `status()`;
   `ValidationException` → 422 padrão; `AuthenticationException` → 401 JSON;
   `ThrottleRequestsException` → 429 com `Retry-After`.
-- Rotas nomeadas com prefixo (`store.products.show`, `admin.orders.update-status`).
-  Permissão nas rotas admin via `->can('update', 'order')` ou middleware
-  `permission:orders.update_status,admin` além da Policy.
+- Rotas nomeadas com prefixo (`store.products.show`, `admin.orders.transitions.store`).
+  Permissão nas rotas admin via middleware `permission:orders.fulfill,admin` (nomes em
+  API.md §6.3 — ver ADR-028) além da Policy.
 
 ### 3.3 Regras de implementação
 
@@ -835,7 +846,7 @@ Configuração em `bootstrap/app.php`:
 | Service | Implementação de `Contracts/` (regra reutilizável). Não lê `request()`. |
 | Model | `$fillable` explícito (nunca `$guarded = []`), casts para `Money`/`Quantity`/enums, `getRouteKeyName()` = `uuid` para recursos do cliente. `Model::shouldBeStrict()` fora de produção. |
 | Resource | Única forma de saída JSON. Dinheiro como inteiro `*_cents`, quantidade como número decimal (string formatada `"5.500"` convertida para número), datas ISO-8601 UTC. Nunca expõe `id` interno em recursos do cliente (usa `uuid`/`number`). |
-| Policy | Toda leitura/escrita de recurso de cliente (`OrderPolicy::view` confere `customer_id`) e toda ação admin (`$admin->can('orders.cancel')`). |
+| Policy | Toda leitura/escrita de recurso de cliente (`OrderPolicy::view` confere `customer_id`) e toda ação admin (`$admin->can('orders.cancel_paid')`). |
 | DTO | Toda chamada entre módulos usa DTO/escalares, nunca `Request` e, preferencialmente, não Models de outro módulo. Principais: `CartSnapshot`, `CartLine`, `PriceContext`, `PriceQuote`, `PricingSubject`, `ShippingRequest`, `ShippingOption`, `CouponContext`, `CouponEvaluation`, `StockReservation`, `PlaceOrderData`, `PaymentRequest`, `PaymentData`. |
 | Evento | `final class` com propriedades `readonly` escalares/IDs (serializáveis); nunca dados sensíveis. |
 | Exceção de domínio | Estende `DomainException` com `errorCode()`; o handler traduz para HTTP. |
@@ -855,8 +866,8 @@ enfileirado que só é despachado se a transação confirmar.
 
 ### 4.1 Adicionar ao carrinho (com cálculo de preço)
 
-Antes de adicionar, a página de produto chama `POST /api/v1/price-quotes`
-(`{variant_uuid, quantity | width_m, height_m, pieces}`, debounce 300 ms) que executa os
+Antes de adicionar, a página de produto chama `POST /api/v1/products/{slug}/price-preview`
+(`{variant_id, quantity | width_m, height_m, pieces}`, debounce 300 ms — API.md §3.A, ADR-028) que executa os
 passos 4–7 abaixo sem persistir e retorna `PriceQuote` (unitário, total da linha, área
 faturável, `min_area_applied`, `price_source`).
 
@@ -871,12 +882,12 @@ sequenceDiagram
     participant PRC as Pricing (PriceResolver)
     participant DB as PostgreSQL
 
-    SPA->>API: POST /api/v1/cart/items (X-Cart-Token opcional) {variant_uuid, quantity or width_m/height_m/pieces}
+    SPA->>API: POST /api/v1/cart/items (X-Cart-Token opcional) {variant_id, quantity or width_m/height_m/pieces}
     Note over API: middleware api (sessão se logado), throttle:cart, AddCartItemRequest valida formato
     API->>ACT: execute(AddCartItemData, customerId?, cartToken?)
     ACT->>DB: resolve carrinho (cliente logado → carrinho dele, senão token), cria se não existe
     Note over ACT: token de carrinho que pertence a cliente só é aceito se o cliente logado for o dono
-    ACT->>CAT: variantByUuid() — ativa e publicada?
+    ACT->>CAT: variant(variantId) — ativa e publicada?
     CAT-->>ACT: VariantData (sale_unit, regras, peso)
     ACT->>CAT: SaleQuantityResolver.resolve(variant, SaleInput)
     alt regra violada (step, mín, largura fixa, faixa)
@@ -901,7 +912,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     participant SPA as Storefront SPA
-    participant API as ShippingQuoteController (Cart, Store)
+    participant API as CartShippingQuoteController (Cart, Store)
     participant CART as CartService
     participant QS as ShippingQuoteService
     participant CEP as PostalCodeLookup
@@ -911,7 +922,7 @@ sequenceDiagram
     participant CR as Carriers (Http pool)
     participant DB as PostgreSQL
 
-    SPA->>API: POST /api/v1/cart/shipping-quotes {postal_code}
+    SPA->>API: POST /api/v1/cart/shipping-quote {postal_code | address_uuid}
     Note over API: throttle:shipping-quote (10/min IP), valida CEP 8 dígitos
     API->>CART: snapshot() + toShippingRequest(cart, CEP)
     CART-->>API: ShippingRequest (itens, pesos em g, embalagens, subtotal, cartHash)
@@ -936,16 +947,17 @@ sequenceDiagram
         ENG-->>QS: ShippingOption[] (pickup, own_delivery, table_rate, carrier)
         QS->>DB: INSERT shipping_quotes com opções em jsonb (expires_at = now+30min)
     end
-    API-->>SPA: 200 {quote_id, postal_code, city, uf, expires_at, options:[{id, name, price_cents, min_days, max_days}]}
+    API-->>SPA: 200 {data: Cart com shipping_quote: ShippingQuote} (formato em API.md §2.6/§3.B)
 ```
 
 ### 4.3 Checkout (PIX)
 
 Pré-requisitos: cliente logado; carrinho com itens; endereço (`uuid`) do próprio cliente;
 `shipping_quote_id` + `shipping_option_id` obtidos na cotação (contrato de `SHIPPING.md`). O corpo **não** contém preço, desconto, frete,
-total, `customer_id` nem status (ADR-012). Opcional 🔧: `expected_total_cents` — usado
-**apenas para comparação**; se diferente do total recalculado, 409 `price_changed` com os
-novos totais (evita cobrar valor que o cliente não viu).
+total, `customer_id` nem status (ADR-012) — se presentes, **422 `prohibited`** (API.md §1.7).
+`expected_total_cents` é **obrigatório** e usado **apenas para comparação**; se diferente do
+total recalculado, 409 `price_changed` com o novo resumo (ADR-021). A ordem normativa de
+validação está em API.md §3.E (prevalece sobre este diagrama — ADR-028).
 
 ```mermaid
 sequenceDiagram
@@ -963,25 +975,28 @@ sequenceDiagram
     participant PAY as PaymentService
     participant GW as PaymentGateway (Mercado Pago)
 
-    SPA->>API: POST /api/v1/me/checkout (Idempotency-Key: uuid) {shipping_address_uuid, shipping_quote_id, shipping_option_id, payment_method: pix, coupon_code?}
-    Note over API: auth:customer, CSRF, throttle:checkout, CheckoutRequest (header UUID obrigatório → 422/400)
+    SPA->>API: POST /api/v1/checkout (Idempotency-Key: uuid) {address_uuid, shipping_quote_id, shipping_option_id, payment_method: pix, expected_total_cents, notes?, accept_terms}
+    Note over API: auth:customer, CSRF, throttle:checkout, CheckoutRequest (header UUID obrigatório → 422)
     API->>CHK: execute(CheckoutData)
     CHK->>DB: BEGIN TX + pg_advisory_xact_lock(1001, customer_id)
     CHK->>ORD: findByIdempotencyKey(customer, key)
     alt pedido já existe (replay)
         alt fingerprint diferente
-            CHK-->>API: 409 idempotency_key_reused
+            CHK-->>API: 409 idempotency_conflict
         else mesmo pedido
             CHK->>DB: COMMIT
             CHK->>PAY: initiate(paymentId) somente se ainda não iniciado
             CHK-->>API: 200 mesmo pedido (replayed = true)
         end
     end
+    CHK->>DB: pedidos pending_payment do cliente ≥ 3? → 409 too_many_pending_orders
     CHK->>CUS: addressForCustomer(customerId, addressUuid)
     Note over CHK: endereço de outro cliente → 422 (não revela existência)
     CHK->>INV: lockForUpdate(variantIds do carrinho, ORDER BY variant_id)
     CHK->>CART: snapshot(cartId) — recalcula quantidade faturável e preços (PriceResolver)
-    alt carrinho vazio ou item inativo
+    alt carrinho vazio
+        CHK-->>API: 409 cart_empty
+    else item inativo/inválido
         CHK-->>API: 422 cart_invalid
     end
     CHK->>INV: disponibilidade sob lock
@@ -990,15 +1005,18 @@ sequenceDiagram
     end
     CHK->>SHP: revalidate(quoteId, optionId, ShippingRequest recalculado)
     alt cotação expirada, CEP/carrinho mudou ou opção indisponível
-        CHK-->>API: 409 shipping_quote_expired
+        CHK-->>API: 409 shipping_* (shipping_quote_expired, shipping_postal_code_changed… — SHIPPING §7) + nova cotação
     end
-    opt coupon_code
+    opt cupom aplicado no carrinho
         CHK->>CPN: redeem(code, CouponContext) — lock do cupom, limites total e por cliente
         alt inválido/esgotado
-            CHK-->>API: 422 {errors: {coupon_code}}
+            CHK-->>API: 409 coupon_invalid {coupon, summary} (ver ADR-028)
         end
     end
-    CHK->>CHK: total = subtotal − desconto + frete (Money, nunca negativo)
+    CHK->>CHK: total = subtotal − desconto + frete − desconto de frete (Money, nunca negativo)
+    alt total ≠ expected_total_cents
+        CHK-->>API: 409 price_changed {summary}
+    end
     CHK->>ORD: place(PlaceOrderData)
     ORD->>DB: INSERT orders (number = CV- + nextval(order_number_seq), status pending_payment, expires_at = now + PIX min)
     ORD->>DB: INSERT order_items (snapshot nome, SKU, unidade, preço, dimensões, peso) + order_status_history
@@ -1015,7 +1033,7 @@ sequenceDiagram
         API-->>SPA: 201 {order: {uuid, number, totals}, payment: {status: pending, pix: {qr_code_base64, copy_paste, expires_at}}}
     else timeout ou erro
         PAY->>DB: INSERT payment_transactions (create_failed)
-        API-->>SPA: 503 {code: payment_gateway_unavailable, order_uuid}
+        API-->>SPA: 503 {code: payment_gateway_unavailable, order: {uuid, number}}
         Note over SPA: SPA repete o MESMO request (mesma Idempotency-Key) com backoff → caminho de replay reinicia o PIX
     end
 ```
@@ -1024,8 +1042,9 @@ Observações:
 
 - A trava consultiva `pg_advisory_xact_lock(1001, customer_id)` (namespace 1001 = checkout,
   `DATABASE.md` §4.2) serializa os checkouts do mesmo cliente; `unique(customer_id, idempotency_key)` é a garantia final (ADR-009).
-- `checkout_fingerprint` = `sha256(cart_hash|address_uuid|shipping_option_id|payment_method|coupon)`
-  🔧 (ver 12.2): mesma chave com corpo diferente → 409.
+- `checkout_fingerprint` = `sha256` do JSON canônico de `{address_uuid, shipping_quote_id,
+  shipping_option_id, payment_method, expected_total_cents, notes}` (API.md §1.9; conteúdo do
+  carrinho não entra): mesma chave com corpo diferente → 409 `idempotency_conflict` (ADR-021/028).
 - Se o pedido ficar sem PIX (gateway fora), ele expira normalmente (4.5) e libera o estoque.
 
 ### 4.4 Webhook de pagamento
@@ -1053,7 +1072,7 @@ sequenceDiagram
     end
     WC->>DB: INSERT webhook_events (provider, external_id, payload) ON CONFLICT DO NOTHING
     alt duplicado
-        WC-->>MP: 200 {status: duplicate} (sem reprocessar)
+        WC-->>MP: 200 {"status":"ok"} (sem reprocessar — mesma resposta do novo, API.md §3.F)
     end
     WC->>Q: dispatch ProcessWebhookEvent(eventId) afterCommit
     WC-->>MP: 200
@@ -1074,8 +1093,12 @@ sequenceDiagram
             ORD->>DB: orders.status paid, payment_status approved, order_status_history
             ORD->>INV: commit(StockReservation) — on_hand −= q, reserved −= q
             ORD->>ORD: evento OrderPaid
-        else pedido já cancelado/expirado (pagamento tardio)
-            ORD->>PAY: requestRefund(order, total, late_payment) + alerta admin
+        else pedido já cancelado por expiração (pagamento tardio — ADR-022)
+            alt há estoque para todos os itens
+                ORD->>INV: reserve + commit; pedido cancelled → paid (transição exclusiva do sistema, histórico)
+            else sem estoque
+                ORD->>PAY: requestRefund(order, total, late_payment) + alerta admin
+            end
         end
         PAY->>DB: COMMIT
     end
@@ -1112,8 +1135,8 @@ sequenceDiagram
         CMD->>PAY: markExpired(orderId) — payments.status expired (lock payment)
         CMD->>CPN: releaseForOrder(orderId)
         CMD->>INV: release(StockReservation) — reserved −= q (lock por variant_id)
-        CMD->>DB: orders.status cancelled, cancel_reason expired, payment_status expired, histórico (actor system)
-        CMD->>CMD: evento OrderCancelled(reason expired)
+        CMD->>DB: orders.status cancelled, cancel_reason_code payment_expired, payment_status expired, histórico (actor system)
+        CMD->>CMD: evento OrderCancelled(reason payment_expired)
         CMD->>DB: COMMIT
         DB-->>N: afterCommit: OrderCancelledNotification (texto "pagamento expirado")
     end
@@ -1125,7 +1148,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     participant ADM as Admin SPA
-    participant API as OrderStatusController (Admin)
+    participant API as OrderTransitionController (Admin)
     participant POL as OrderPolicy
     participant ACT as ChangeOrderStatus
     participant SM as OrderStateMachine
@@ -1133,9 +1156,9 @@ sequenceDiagram
     participant AUD as AuditLogger
     participant N as Notifications
 
-    ADM->>API: PATCH /api/v1/admin/orders/{number}/status {status: shipped, tracking_code?, note?}
-    Note over API: auth:admin, admin.fresh, CSRF, throttle:admin, UpdateOrderStatusRequest (status ∈ enum, sem cancelled)
-    API->>POL: updateStatus(admin, order) → admin.can(orders.update_status)
+    ADM->>API: POST /api/v1/admin/orders/{id}/transitions {to_status: shipped, tracking_code?, note?}
+    Note over API: auth:admin, admin.fresh, CSRF, throttle:admin, OrderTransitionRequest (to_status ∈ enum, sem cancelled) — API.md §3.G.9
+    API->>POL: transition(admin, order, to) → admin.can(orders.fulfill) (picked_up: orders.fulfill | orders.pickup)
     alt sem permissão
         POL-->>ADM: 403
     end
@@ -1146,7 +1169,7 @@ sequenceDiagram
         SM-->>ADM: 409 invalid_status_transition
     end
     ACT->>DB: UPDATE orders (status, shipped_at, tracking_code) + order_status_history (admin, nota)
-    ACT->>AUD: record(orders.status_changed, from→to)
+    ACT->>AUD: record(order.status_changed, from→to)
     ACT->>ACT: evento OrderStatusChanged(from, to)
     ACT->>DB: COMMIT
     API-->>ADM: 200 OrderResource (Admin)
@@ -1175,8 +1198,8 @@ sequenceDiagram
     participant GW as PaymentGateway
     participant N as Notifications
 
-    ADM->>API: POST /api/v1/admin/orders/{number}/cancel {reason}
-    Note over API: permissão orders.cancel e, se pago, também orders.refund
+    ADM->>API: POST /api/v1/admin/orders/{id}/cancel {reason}
+    Note over API: orders.cancel_unpaid (pending_payment) ou orders.cancel_paid (paid/processing) — API.md §6.3
     API->>ACT: execute(order, reason, ActorRef admin)
     ACT->>DB: BEGIN TX, SELECT order FOR UPDATE, SELECT payment FOR UPDATE
     ACT->>ACT: estado ∈ {pending_payment, paid, processing}? senão 409
@@ -1188,7 +1211,7 @@ sequenceDiagram
         ACT->>PAY: requestRefund(order, total, reason) — payment_transactions refund pending
     end
     ACT->>CPN: releaseForOrder(order)
-    ACT->>DB: orders.status cancelled, histórico, audit_logs (orders.cancelled)
+    ACT->>DB: orders.status cancelled, histórico, audit_logs (order.cancelled)
     ACT->>ACT: evento OrderCancelled
     ACT->>DB: COMMIT
     API-->>ADM: 200 (payment_status approved, refund_status pending)
@@ -1237,7 +1260,7 @@ Cliente pode cancelar **apenas** pedidos `pending_payment` próprios
 | `AdminRolesChanged` (Identity) | `adminUserId`, `roles[]`, `byAdminId` | `ForgetPermissionCache` (Identity) | síncrono |
 | `ProductSaved` (Catalog) | `productId`, `changedFields[]` | `ReindexProduct` (Catalog), `ForgetSitemapCache` (Seo) | queued / `default` |
 | `ProductDeleted` (Catalog) | `productId` | `RemoveFromSearchIndex` (Catalog), `ForgetSitemapCache` (Seo) | queued / `default` |
-| `ProductSlugChanged` (Catalog) | `productId`, `oldPath`, `newPath` | `CreateRedirect` (Seo) | **síncrono** |
+| `ProductSlugChanged` (Catalog) | `productId`, `oldPath`, `newPath` | — (`CreateRedirect` adiado com `url_redirects`, ADR-026) | — |
 | `CategoryTreeChanged` (Catalog) | `categoryId` | `ForgetCategoryTreeCache` (Catalog), `ForgetSitemapCache` (Seo) | queued / `default` |
 | `StockLow` (Inventory) | `variantId`, `availableMilli`, `thresholdMilli` | `RecordLowStockForDigest` (Notifications — acumula em Redis set p/ digest diário) | queued / `notifications` |
 | `StockAdjusted` (Inventory) | `variantId`, `movementId`, `type`, `deltaMilli`, `actor` | — (auditoria gravada pela Action; reservado p/ ERP) | — |
@@ -1245,7 +1268,7 @@ Cliente pode cancelar **apenas** pedidos `pending_payment` próprios
 | `OrderPlaced` (Orders) | `orderId`, `orderUuid`, `number`, `customerId`, `totalCents`, `paymentMethod` | `SendOrderReceived` (e-mail com instruções PIX, após `initiate`; se o PIX ainda não existir o e-mail sai sem QR e com link para o pedido), `NotifyAdminNewOrder` | queued / `notifications` |
 | `OrderPaid` (Orders) | `orderId`, `number`, `customerId`, `totalCents`, `paidAt` | `SendOrderPaid` (cliente), `NotifyAdminOrderPaid`, `CheckLowStockAfterSale` (Inventory → pode emitir `StockLow`) | queued / `notifications` (e `default` p/ estoque) |
 | `OrderStatusChanged` (Orders) | `orderId`, `from`, `to`, `actor`, `?trackingCode` | `SendOrderStatusUpdate` (e-mail/WhatsApp para `shipped`, `ready_for_pickup`, `delivered`) | queued / `notifications` |
-| `OrderCancelled` (Orders) | `orderId`, `number`, `reason` (expired, customer, admin, fraud), `wasPaid`, `actor` | `SendOrderCancelled` | queued / `notifications` |
+| `OrderCancelled` (Orders) | `orderId`, `number`, `reason` (`CancelReasonCode`: payment_expired, customer, admin, payment_failed), `wasPaid`, `actor` | `SendOrderCancelled` | queued / `notifications` |
 | `PaymentCreated` (Payments) | `paymentId`, `orderId`, `method`, `expiresAt` | — | — |
 | `PaymentApproved` (Payments) | `paymentId`, `orderId`, `amountCents`, `approvedAt`, `gateway` | `MarkOrderAsPaid` (Orders) | **síncrono** (mesma TX) |
 | `PaymentFailed` (Payments) | `paymentId`, `orderId`, `reasonCode` | `RecordPaymentFailure` (Orders, histórico — pedido continua `pending_payment` até expirar) | síncrono |
@@ -1353,7 +1376,7 @@ final class PaymentGatewayManager extends \Illuminate\Support\Manager {
 
 | Driver | Detalhes |
 |---|---|
-| `sandbox` | PIX fake (QR PNG gerado localmente + copia-e-cola `00020126...SANDBOX`). Comando `php artisan payments:sandbox-approve {order_number}` e botão no admin **apenas em `local`/`staging`** enviam webhook assinado com `SANDBOX_WEBHOOK_SECRET`, exercitando o mesmo caminho de produção. |
+| `sandbox` | PIX fake (QR PNG gerado localmente + copia-e-cola `00020126...SANDBOX`). Endpoints `POST /api/v1/dev/payments/{order_uuid}/approve|fail` (**somente `local`/`testing`**) e, em `staging`, o comando `php artisan payments:sandbox-approve {order_number}` enviam webhook assinado com `SANDBOX_WEBHOOK_SECRET`, exercitando o mesmo caminho de produção (API.md §3.F). |
 | `mercadopago` | `POST /v1/payments` (`payment_method_id=pix`, `date_of_expiration`, `X-Idempotency-Key`), `GET /v1/payments/{id}`, `POST /v1/payments/{id}/refunds`. Webhook: header `x-signature` (`ts=…,v1=…`) com HMAC-SHA256 do manifesto `id:{data.id};request-id:{x-request-id};ts:{ts};` usando `MERCADOPAGO_WEBHOOK_SECRET`. |
 | `FakePaymentGateway` (tests) | Em memória, controlável (`approveNext()`, `failNextWith()`, `throwTimeout()`), registra chamadas para asserts. Testes do driver real usam `Http::fake` + `Http::preventStrayRequests()`. |
 
@@ -1490,7 +1513,7 @@ validação no backend):
 
 **Admin** (`basename: '/admin'`): `/entrar`, `/` (dashboard), `/produtos`, `/produtos/:id`,
 `/categorias`, `/marcas`, `/estoque`, `/precos` (tabelas, preços de cliente),
-`/promocoes`, `/cupons`, `/pedidos`, `/pedidos/:number`, `/clientes`, `/clientes/:id`,
+`/promocoes`, `/cupons`, `/pedidos`, `/pedidos/:id` (id inteiro — API.md §1.1), `/clientes`, `/clientes/:id`,
 `/frete`, `/usuarios`, `/configuracoes`, `/relatorios`, `/auditoria`. Cada rota declara
 `permission` (ex.: `orders.view`); `RequirePermission` esconde menu e bloqueia rota
 (o backend continua sendo a autoridade — 403).
@@ -1533,7 +1556,7 @@ export const productKeys = {
   detail: (slug: string) => [...productKeys.all, 'detail', slug] as const,
 };
 // ['cart'], ['cart','shipping-quote', cep], ['orders','list',{page}], ['orders','detail',uuid], ['auth','me']
-// admin: ['admin','orders','list',filters], ['admin','orders','detail',number], ['admin','settings']
+// admin: ['admin','orders','list',filters], ['admin','orders','detail',id], ['admin','settings'] — tabela completa em API.md §7
 ```
 
 | Dado | `staleTime` | Observação |
@@ -1557,7 +1580,7 @@ Defaults: `retry` só para erros de rede/5xx (máx. 2), nunca para 4xx;
 | 401 | storefront: limpa `['auth','me']`; rotas protegidas redirecionam para `/entrar`. |
 | 403 | página/aviso "sem permissão". |
 | 404 | página 404. |
-| 409 | tratado por `code`: `insufficient_stock` (ajusta quantidade), `shipping_quote_expired` (recota), `price_changed` (mostra novos totais e pede confirmação), `idempotency_key_reused`, `invalid_status_transition`. |
+| 409 | tratado por `code` (lista em API.md §1.6): `insufficient_stock` (ajusta quantidade), `shipping_*` (substitui a cotação pela retornada), `price_changed` (mostra novos totais e pede confirmação), `coupon_invalid`, `idempotency_conflict`, `too_many_pending_orders`, `cart_empty`, `invalid_status_transition`, `stale_resource`. |
 | 419 | renova CSRF e repete uma vez. |
 | 429 | toast "muitas tentativas, tente em N s" (`Retry-After`). |
 | 5xx/rede | toast genérico + `requestId` ("Código do erro: …") para suporte; `ErrorBoundary` por rota. |
@@ -1572,7 +1595,7 @@ Defaults: `retry` só para erros de rede/5xx (máx. 2), nunca para 4xx;
   cálculos locais (ex.: prévia de área) sempre em inteiros (mm, milli).
 - Dimensões: usuário digita metros com vírgula (`1,22`); `DimensionsInput` valida faixa/
   largura fixa conforme regras do produto vindas da API; o preço exibido vem **sempre**
-  de `POST /price-quotes` (o frontend nunca calcula preço).
+  de `POST /products/{slug}/price-preview` (o frontend nunca calcula preço).
 - Datas: `formatDateTime(iso)` em `America/Sao_Paulo`; documentos com máscara (CPF/CNPJ/CEP/telefone).
 
 ### 8.7 Schemas Zod
@@ -1661,7 +1684,7 @@ Volumes nomeados para `pgdata`, `redisdata`, `miniodata`.
 | `~ ^/(busca\|carrinho\|checkout\|conta\|entrar\|cadastro\|recuperar-senha\|redefinir-senha)(/.*)?$` | storefront `index.html` estático | `no-store`; `X-Robots-Tag: noindex` exceto `/busca`. |
 | `= /` | storefront `index.html` | meta padrão da loja. |
 | `/` (demais) | `try_files $uri @seo_shell` | arquivos reais (favicon, manifest) servidos direto. |
-| `@seo_shell` | php-fpm → `Seo\ShellController` | Resolve `/{category}` e `/{category}/{product}`; injeta meta/JSON-LD no `index.html` da loja (`SEO_SHELL_INDEX_PATH`, copiado para a imagem do backend no build). Slug inexistente → mesmo shell com **status 404** + `noindex`; slug antigo → 301 (`url_redirects`). |
+| `@seo_shell` | php-fpm → `Seo\ShellController` | Resolve `/{category}` e `/{category}/{product}`; injeta meta/JSON-LD no `index.html` da loja (`SEO_SHELL_INDEX_PATH`, copiado para a imagem do backend no build). Slug inexistente → mesmo shell com **status 404** + `noindex`; produto acessado por categoria não canônica → 301 (redirects de slug antigo adiados — ADR-026). |
 
 TLS termina no nginx (ou no load balancer, com `real_ip` + `TrustProxies` configurados).
 HTTP → HTTPS 301. Headers de segurança em snippet incluído em todos os `server` (SECURITY.md §14).
@@ -1684,9 +1707,9 @@ Disparo: `pull_request` e `push` em `main`. `concurrency` cancela runs antigos d
 
 | Job | Passos |
 |---|---|
-| `backend` | `services: postgres:16 (com unaccent), redis:7`; `shivammathur/setup-php` 8.4 (+ extensões); cache Composer; `composer install --no-interaction --prefer-dist`; `composer audit`; `vendor/bin/pint --test`; `vendor/bin/deptrac analyse` 🔧; (opcional 🔧 `vendor/bin/phpstan` Larastan nível 6); `php artisan migrate --force` no banco de CI; `php artisan test --parallel` (PHPUnit); upload de relatório JUnit. |
+| `backend` | `services: postgres:16 (com unaccent), redis:7`; `shivammathur/setup-php` 8.4 (+ extensões); cache Composer; `composer install --no-interaction --prefer-dist`; `composer audit`; `vendor/bin/pint --test`; testes de arquitetura (suite `Architecture`, ADR-018 — sem deptrac no MVP); (opcional 🔧 `vendor/bin/phpstan` Larastan nível 6); `php artisan migrate --force` no banco de CI; `php artisan test --parallel` (PHPUnit); upload de relatório JUnit. |
 | `storefront` / `admin` (matrix) | `actions/setup-node` 22 + cache npm; `npm ci`; `npm audit --audit-level=high --omit=dev`; `npm run lint` (ESLint + jsx-a11y); `npm run typecheck` (`tsc --noEmit`); `npm run test -- --run` (Vitest); `npm run build`; upload do `dist` como artifact. |
-| `security` | `gitleaks/gitleaks-action` (segredos no diff); Dependabot configurado em `.github/dependabot.yml` (composer, npm ×2, docker, actions — semanal). |
+| `security` | `gitleaks/gitleaks-action` (segredos no diff); `composer audit` e `npm audit --audit-level=high` (ADR-026a); Dependabot configurado em `.github/dependabot.yml` (composer, npm ×2, docker, actions — semanal). |
 | `e2e` (opcional) | `needs: [backend, storefront, admin]`; roda em `push` na `main`, `workflow_dispatch` ou PR com label `e2e`; `docker compose up -d` com os `dist` gerados; seed de demo; `npx playwright test` (Chromium) — fluxos: cadastro/login, carrinho com m², frete, checkout PIX sandbox + aprovação por webhook assinado, admin muda status; relatório/trace como artifact. |
 
 Branch protection: `backend`, `storefront`, `admin`, `security` obrigatórios.
@@ -1752,7 +1775,7 @@ Branch protection: `backend`, `storefront`, `admin`, `security` obrigatórios.
 
 - Horizon **adiado** (6.2). MVP: `queue:monitor` (alerta via log `error` + e-mail admin
   quando uma fila passa de 100 jobs), `failed_jobs` visível no painel (Reports → "Jobs com
-  falha", permissão `audit.view`), evento `JobFailed` logado com `request_id`.
+  falha" via `GET /admin/failed-jobs`, permissão `audit_logs.view`), evento `JobFailed` logado com `request_id`.
 - Heartbeat do scheduler em Redis (`scheduler:heartbeat`).
 
 ### 10.5 Health checks
@@ -1840,7 +1863,14 @@ Checkout/Orders/Payments/Inventory permanecem juntos (transação ACID é o valo
 | 016 | Auditoria, soft delete, observabilidade | 2.4 Audit, 10 |
 | 017 | Regras entre agentes | 3.1 (bancos de teste), 9.1 |
 
-### 12.2 Propostas de novas ADRs / refinamentos (🔧 — aguardam aceite do coordenador)
+### 12.2 Propostas de novas ADRs / refinamentos (histórico)
+
+> **Status:** estas propostas foram resolvidas na Rodada 2 de DECISIONS.md (ADR-018…ADR-028),
+> que prevalece. Diferenças notáveis em relação ao texto abaixo: verificação de módulos por
+> teste de arquitetura PHPUnit (não deptrac — ADR-018); área por peça (ADR-019); código
+> `idempotency_conflict` (não `idempotency_key_reused` — ADR-021/028); pagamento tardio reativa
+> o pedido se houver estoque (ADR-022); sanitização com `ezyang/htmlpurifier` (ADR-024);
+> `url_redirects` fora do MVP (ADR-026); contrato HTTP canônico em API.md (ADR-028).
 
 | # | Proposta | Motivo |
 |---|---|---|

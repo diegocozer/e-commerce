@@ -1,25 +1,39 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+/**
+ * Seed spec of DATABASE.md §7. All seeders are idempotent (updateOrCreate by
+ * natural key). In production only reference data is seeded (no demo catalog,
+ * no admin with a default password — create it with an artisan command).
+ */
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $this->call([
+            SettingsSeeder::class,
+            RolesAndPermissionsSeeder::class,
+            PriceListSeeder::class,
+            IbgeCitySeeder::class,
+            ShippingSeeder::class,
+        ]);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        if (app()->isProduction()) {
+            return;
+        }
+
+        $this->call([
+            AdminUserSeeder::class,
+            CatalogSeeder::class,
+            // Customers before Pricing: customer_prices references the PJ company.
+            CustomerSeeder::class,
+            PricingSeeder::class,
+            PromotionSeeder::class,
         ]);
     }
 }

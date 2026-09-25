@@ -134,7 +134,7 @@ Objetivos de negócio do MVP:
 | P5 | **Paulo — vendedor** | `seller` | Atender clientes, consultar pedidos, cadastrar clientes, aplicar tabela de preço. | Não sabe status real do pedido. | Visualizar pedidos/clientes, cancelar pedidos não pagos, criar cupons (se autorizado). |
 | P6 | **Sérgio — estoquista/expedição** | `warehouse` | Separar, cortar, embalar, despachar/entregar; dar entrada de mercadoria; ajustar estoque. | Lista de separação em papel; divergência de estoque. | Fila de pedidos `paid`, mudar status até `delivered`/`picked_up`, movimentos de estoque com motivo, alerta de estoque baixo. |
 | P7 | **Fernanda — financeiro** | `finance` | Conferir pagamentos, fazer estornos, ver faturamento. | Conciliar PIX manualmente. | Lista de pagamentos, reconsulta ao gateway, estorno, relatórios. |
-| P8 | **Carla — gerente/admin** | `admin` (super) | Configurar loja: produtos, preços, frete, usuários e permissões. | Depende de TI para mudar preço/frete. | Acesso total, auditoria de quem fez o quê. |
+| P8 | **Carla — gerente/admin** | `super-admin` ou `manager` (ver ADR-023) | Configurar loja: produtos, preços, frete, usuários e permissões. | Depende de TI para mudar preço/frete. | Acesso total, auditoria de quem fez o quê. |
 
 ---
 
@@ -251,7 +251,7 @@ Carrinho → Identificação → Endereço → Frete → Pagamento → Revisão 
 | RN-CAT-002 | Todo produto tem **≥ 1 variante** (ADR-004). Produto simples = 1 variante "padrão". Carrinho, preço, estoque e pedido referenciam a **variante**. |
 | RN-CAT-003 | Variante possui: `sku` (único global, 3–40 caracteres, `[A-Z0-9-]`, armazenado em maiúsculas), nome/rótulo da variação (ex.: "Branco Brilho 1,22 m"), atributos (cor, acabamento, largura, gramatura, espessura), preço base, regras de quantidade/dimensão, peso e embalagem, `low_stock_threshold`, status ativo/inativo. |
 | RN-CAT-004 | `sale_unit` é definida no **produto** e vale para todas as variantes (ADR-004). Não pode ser alterada se já existir pedido com o produto (evita inconsistência histórica); para mudar, cria-se novo produto. |
-| RN-CAT-005 | **Slug**: minúsculas, sem acento, `[a-z0-9-]`, 3–120 caracteres, gerado a partir do nome e editável. Produto: único globalmente. Categoria: único globalmente. Não pode coincidir com slugs reservados (`busca`, `carrinho`, `checkout`, `conta`, `entrar`, `cadastro`, `admin`, `api`, `sitemap.xml`, `robots.txt`) (ADR-015). |
+| RN-CAT-005 | **Slug**: minúsculas, sem acento, `[a-z0-9-]`, 3–120 caracteres, gerado a partir do nome e editável. Produto: único globalmente. Categoria: único globalmente. Não pode coincidir com slugs reservados (`busca`, `carrinho`, `checkout`, `conta`, `entrar`, `cadastro`, `recuperar-senha`, `redefinir-senha`, `institucional`, `admin`, `api`, `sanctum`, `sitemap.xml`, `robots.txt`) (ADR-015, ver ADR-026a). |
 | RN-CAT-006 | URL do produto: `/{category-slug}/{product-slug}` usando a **categoria principal**. Produto pode estar em categorias adicionais (listagem), mas a URL canônica é sempre a da principal. |
 | RN-CAT-007 | **Categorias** em árvore com até **3 níveis** (ex.: Mídias → Vinis → Vinil Adesivo). Possuem nome, slug, descrição, imagem, ordem de exibição, meta title/description e ativo/inativo. |
 | RN-CAT-008 | Não é permitido desativar/excluir categoria que seja **categoria principal** de produto ativo, nem que possua subcategorias ativas. O sistema lista os bloqueios. |
@@ -314,14 +314,14 @@ Carrinho → Identificação → Endereço → Frete → Pagamento → Revisão 
 | ID | Regra |
 |---|---|
 | RN-QTD-020 | Total da linha = `round_half_up(unit_price_cents × quantity_milli / 1000)` (ADR-003), para **todas** as unidades. |
-| RN-QTD-030 | Área (milésimos de m²) = `width_mm × height_mm × pieces / 1000` (ADR-003). Ex.: 1200 × 2500 × 1 / 1000 = 3000 → 3,000 m². (Ver Q-01 sobre resultados não inteiros.) |
-| RN-QTD-031 | Se a área calculada da **linha** < `min_billable_area`, a quantidade faturada = `min_billable_area`. A tela exibe as duas áreas: "Área calculada 0,200 m² · Área faturada 0,500 m² (mínimo)". O pedido guarda ambas (snapshot). (Ver Q-02 sobre mínimo por peça.) |
+| RN-QTD-030 | Área **por peça** (milésimos de m²) = `round_half_up(width_mm × height_mm / 1000)`; área da linha = área por peça × `pieces` (ver ADR-019, que resolve Q-01). Ex.: 1200 × 2500 / 1000 = 3000 → 3,000 m² por peça. |
+| RN-QTD-031 | A área mínima aplica-se **por peça** (ver ADR-019, que resolve Q-02): `área faturada = max(área da peça, min_billable_area) × pieces`. A tela exibe as duas áreas: "Área calculada 0,200 m² · Área faturada 0,500 m² (mínimo)". O pedido guarda ambas (snapshot). |
 | RN-QTD-032 | **Largura fixa** (`fixed_width_mm` definido): cliente informa somente altura (e peças); largura = `fixed_width_mm`. Valida `min_height_mm`/`max_height_mm`. |
 | RN-QTD-033 | **Faixa de dimensões**: cliente informa largura e altura, cada uma validada contra `min_*_mm`/`max_*_mm`. `fixed_width_mm` e faixa de largura são mutuamente exclusivos no cadastro. |
 | RN-QTD-034 | Dimensões aceitas com até **2 casas decimais em metros** (precisão de 1 cm = múltiplo de 10 mm) no MVP. Ex.: 1,205 m → 422. (Ver Q-04.) |
 | RN-QTD-035 | Peças: inteiro 1–1.000 (padrão 1). |
-| RN-QTD-036 | Para `SQUARE_METER`, `quantity_step`/`min_quantity`/`max_quantity` aplicam-se à **área faturada** (min/max) — o step de área não é exigido (a área é consequência das dimensões). |
-| RN-QTD-037 | O estoque de `SQUARE_METER` é baixado pela **área faturada** em m² (ADR-004). |
+| RN-QTD-036 | Para `SQUARE_METER`, `quantity_step`/`min_quantity`/`max_quantity` referem-se a **peças** (ver ADR-019); `cart_items.quantity` é NULL e `width_mm`/`height_mm`/`pieces` são obrigatórios. |
+| RN-QTD-037 | O estoque de `SQUARE_METER` é controlado em m² (ADR-004) e baixado pela **área real** (`order_items.stock_quantity` = área da peça × peças, **sem** área mínima), separada da quantidade faturada (`billable_quantity`) (ver ADR-019). |
 | RN-QTD-038 | Largura e altura são exibidas e registradas como "L × A" (largura primeiro). Não há rotação automática: se o cliente informar largura maior que a largura máxima, recebe erro sugerindo inverter as medidas. |
 
 #### 4.2.5 Exemplos trabalhados (valores oficiais para testes)
@@ -420,12 +420,12 @@ Carrinho → Identificação → Endereço → Frete → Pagamento → Revisão 
 |---|---|
 | RN-PRC-001 | O preço unitário é calculado **sempre no backend** pelo `PriceResolver` (ADR-005), para (variante, quantidade, cliente, data/hora). Valores de preço vindos do frontend são ignorados (ADR-012). |
 | RN-PRC-002 | Candidatos aplicáveis: (1) preço base da variante com **faixas por quantidade** (`price_tiers`); (2) **tabela de preço** do cliente/empresa, também com faixas; (3) **preço promocional** da variante vigente ou **promoção** ativa (percentual/valor fixo por produto/categoria/marca); (4) **preço específico do cliente/empresa** (`customer_prices`). |
-| RN-PRC-003 | **Vence o menor** preço entre os candidatos aplicáveis. Empate: vence pela ordem de prioridade de exibição `customer_price` > `price_list` > `promotion` > `base` (apenas para definir o rótulo `price_source`). |
-| RN-PRC-004 | A resposta informa `price_source` (`base`, `tier`, `price_list`, `promotion`, `customer_price`) e o preço "de" (preço base da faixa 1) quando o resultado for menor, para exibir "de R$ 15,90 por R$ 13,90 — Preço atacado". |
+| RN-PRC-003 | **Vence o menor** preço entre os candidatos aplicáveis. Empate: vence pela ordem de prioridade de exibição `customer_price` > `price_list` > `promotion`/`variant_promo` > `tier` > `base` (apenas para definir o rótulo `price_source`). |
+| RN-PRC-004 | A resposta informa `price_source` (`base`, `tier`, `price_list`, `variant_promo`, `promotion`, `customer_price` — valores de DATABASE, ver ADR-028) e o preço "de" (preço base da faixa 1) quando o resultado for menor, para exibir "de R$ 15,90 por R$ 13,90 — Preço atacado". |
 | RN-PRC-005 | **Faixas por quantidade**: definidas por quantidade mínima (inclusive), na unidade de venda. Padrão sugerido: **1–10**, **11–50**, **51+**. A faixa é escolhida pela quantidade faturada **somada da mesma variante no carrinho** (ver Q-03). Faixas devem ter preços **não crescentes** conforme aumenta a quantidade (validação no cadastro). |
-| RN-PRC-006 | **Tabela de preço**: tipos `retail` (varejo), `wholesale` (atacado), `reseller` (revendedor), `specific` (específica). Cada cliente tem **no máximo uma** tabela; cliente PJ herda a da empresa. Visitante não logado vê apenas base/faixas/promoções. Itens não presentes na tabela usam os demais candidatos. |
+| RN-PRC-006 | **Tabela de preço**: tipos `retail` (varejo), `wholesale` (atacado), `reseller` (revendedor), `custom` (específica; enum de API.md §2.1). Cada cliente tem **no máximo uma** tabela; cliente PJ herda a da empresa. Visitante não logado vê apenas base/faixas/promoções. Itens não presentes na tabela usam os demais candidatos. |
 | RN-PRC-007 | **Promoção**: tem vigência (`starts_at`/`ends_at`, fuso America/Sao_Paulo), alvo (produto, variante, categoria incluindo subcategorias, marca) e tipo (percentual em basis points, ex.: 1000 = 10%, ou valor fixo em centavos por unidade de venda). Preço promocional = `round_half_up`; nunca < 1 centavo. Várias promoções aplicáveis → cada uma é um candidato; vence o menor. |
-| RN-PRC-008 | **Preço do cliente** (`customer_prices`): valor fixo por variante para um cliente ou empresa, com vigência opcional, também pode ter faixas. |
+| RN-PRC-008 | **Preço do cliente** (`customer_prices`): valor fixo por variante para um cliente ou empresa, com vigência opcional. Faixas por preço de cliente ficam **fora do MVP** (schema não prevê — API.md D-17). |
 | RN-PRC-009 | Preços não se **acumulam**: promoção não é aplicada sobre tabela de preço; cada candidato é calculado independentemente sobre o preço de referência e o menor vence. |
 | RN-PRC-010 | **Cupons** são aplicados **depois**, sobre o subtotal (nível pedido) — ver RN-CUP (ADR-005). |
 | RN-PRC-011 | Preço base > 0 obrigatório. Preço resolvido mínimo = R$ 0,01. |
@@ -434,6 +434,9 @@ Carrinho → Identificação → Endereço → Frete → Pagamento → Revisão 
 | RN-PRC-014 | Preços exibidos são finais ao consumidor (impostos inclusos). Destaque de tributos (Lei 12.741/2012 — "valor aproximado dos tributos") fica para a fase NF-e. |
 
 #### 4.5.1 Exemplo de resolução — Vinil Adesivo Branco 1,22 m (VIN-BR-122)
+
+> **Ilustrativo** (ver ADR-028): os números de referência para testes e aceite são os do seed
+> (DATABASE.md §7 — SKU `VIN-BR-122-BR`, R$ 15,90/m, faixas ≥ 10 m R$ 14,90 e ≥ 50 m R$ 13,90).
 
 Configuração:
 
@@ -464,19 +467,19 @@ Promoções (preço) estão em RN-PRC-007. Esta seção trata de **cupons** (ní
 
 | ID | Regra |
 |---|---|
-| RN-CUP-001 | Tipos: `percentage` (percentual em basis points, 1–10000, com teto opcional `max_discount_cents`), `fixed` (valor em centavos), `free_shipping` (zera o frete). |
+| RN-CUP-001 | Tipos: `percent` (percentual em basis points, 1–10000, com teto opcional `max_discount_cents`), `fixed` (valor em centavos), `free_shipping` (zera o frete). (Enum de DATABASE/API.md — ver ADR-028.) |
 | RN-CUP-002 | Código: 3–30 caracteres `[A-Z0-9_-]`, único, **case-insensitive** (armazenado em maiúsculas, espaços nas bordas removidos). |
 | RN-CUP-003 | Vigência `starts_at`/`ends_at` (fuso America/Sao_Paulo); cupom fora da vigência ou inativo → "Cupom inválido ou expirado". |
 | RN-CUP-004 | **Valor mínimo do pedido** (`min_subtotal_cents`): comparado ao **subtotal de produtos** (após resolução de preço, antes do cupom, sem frete). |
 | RN-CUP-005 | Limites de uso: total (`usage_limit`) e por cliente (`usage_limit_per_customer`). Uso é contado na **criação do pedido** e **devolvido** se o pedido for cancelado sem pagamento (expirado/cancelado em `pending_payment`). Pedido pago e depois cancelado **não** devolve o uso. Verificação e incremento com lock na linha do cupom (concorrência). |
 | RN-CUP-006 | **Não cumulativos**: no máximo **1 cupom por pedido**. Aplicar outro substitui o anterior. |
-| RN-CUP-007 | Cupom de desconto (`percentage`/`fixed`) incide **somente sobre o subtotal de produtos**, nunca sobre o frete. |
-| RN-CUP-008 | Cupom `free_shipping` zera o valor do frete escolhido; pode ser restrito a métodos (ex.: só `own_delivery`/`table_rate`) e ter teto de frete coberto (`max_shipping_discount_cents`). Se o frete escolhido não for elegível, mensagem "Cupom de frete grátis não se aplica ao método selecionado". Retirada (R$ 0) → cupom aplicável porém sem efeito (aviso). |
+| RN-CUP-007 | Cupom de desconto (`percent`/`fixed`) incide **somente sobre o subtotal de produtos**, nunca sobre o frete. |
+| RN-CUP-008 | Cupom `free_shipping` zera o valor do frete escolhido; vale para métodos com `accepts_free_shipping_coupon = true` (padrão: `own_delivery`/`table_rate`); teto de frete coberto (`max_shipping_discount_cents`) fica **fora do MVP** (API.md D-17). Se o frete escolhido não for elegível, mensagem "Cupom de frete grátis não se aplica ao método selecionado". Retirada (R$ 0) → cupom aplicável porém sem efeito (aviso). |
 | RN-CUP-009 | O desconto **nunca** leva o subtotal abaixo de zero: `discount = min(calculado, subtotal)`. Percentual: `round_half_up(subtotal × bp / 10000)`, limitado ao teto. |
 | RN-CUP-010 | O cupom é aplicado **sobre o preço já resolvido** (inclusive promoção/tabela) — ele se soma a promoções (preço) mas não a outros cupons. Flag opcional `exclude_promotional_items` fica fora do MVP. |
 | RN-CUP-011 | Rateio do desconto entre itens (para estorno parcial/NF-e futura): proporcional ao total de cada linha, com arredondamento; a diferença de centavos vai para a linha de maior valor. Guardado em `order_items.discount_cents`. |
-| RN-CUP-012 | Cupom é **revalidado** no checkout (vigência, limites, mínimo). Se tornou inválido, o checkout retorna 422 e o cliente vê o novo total sem desconto antes de confirmar. |
-| RN-CUP-013 | Cupom restrito a "primeira compra" (`first_order_only`): válido apenas se o cliente não possui pedido pago. |
+| RN-CUP-012 | Cupom é **revalidado** no checkout (vigência, limites, mínimo). Ao **aplicar** no carrinho, cupom inválido → 422; se deixou de valer no **checkout** → **409 `coupon_invalid`** com o resumo sem desconto, e o cliente reconfirma (ver ADR-028). |
+| RN-CUP-013 | Cupom restrito a "primeira compra" (`first_order_only`) — **fora do MVP** (schema não prevê — API.md D-17); no seed, `BEMVINDO10` usa `usage_limit_per_customer = 1`. |
 | RN-CUP-014 | Total do pedido: `total = subtotal − discount + shipping` (shipping após cupom de frete). Nunca negativo. |
 
 **Exemplos de cupom** (subtotal de produtos R$ 200,00, frete R$ 25,00):
@@ -565,15 +568,15 @@ Etapas: **Carrinho → Identificação → Endereço → Frete → Pagamento →
 
 | ID | Regra |
 |---|---|
-| RN-CHK-001 | O backend **recalcula tudo** no `POST /checkout`: preços (PriceResolver), quantidades/áreas, pesos, cupom, frete (recalcula a opção pelo `shipping_option_id` e valida — ADR-011), totais. Campos de preço/total/desconto/status/customer_id do cliente são ignorados (ADR-012). |
+| RN-CHK-001 | O backend **recalcula tudo** no `POST /checkout`: preços (PriceResolver), quantidades/áreas, pesos, cupom, frete (recalcula a opção pelo `shipping_option_id` e valida — ADR-011), totais. Campos de preço/total/desconto/status/customer_id enviados pelo cliente são **rejeitados com 422** sem efeito (ADR-012; API.md §1.7 — ver ADR-028). |
 | RN-CHK-002 | Dentro de **uma transação**: valida carrinho → trava estoque (`FOR UPDATE`, ordenado por `variant_id`) → verifica disponível → `reserve` → trava e incrementa uso do cupom → cria `orders`/`order_items` com snapshot → cria `order_status_history` → confirma. Falha em qualquer passo → rollback total. |
 | RN-CHK-003 | Estoque insuficiente no momento do checkout → **409** com a lista de itens e disponível atual; nenhum pedido criado. |
 | RN-CHK-004 | Cotação de frete expirada (TTL 30 min) ou carrinho alterado após a cotação → **409** "Frete precisa ser recalculado"; cliente reescolhe. |
 | RN-CHK-005 | Se o total recalculado for diferente do exibido na revisão (preço, cupom ou frete mudou), o pedido **não** é criado: 409 com os novos valores para nova confirmação (ver Q-05). |
-| RN-CHK-006 | **Idempotência** (ADR-009): `Idempotency-Key` UUID obrigatório; mesma chave + mesmo cliente → retorna o **mesmo pedido** (200) sem criar outro. Chave ausente/inválida → 422. |
+| RN-CHK-006 | **Idempotência** (ADR-009): `Idempotency-Key` UUID obrigatório; mesma chave + mesmo cliente + mesmo corpo → retorna o **mesmo pedido** (200, `replayed: true`) sem criar outro; mesma chave com corpo diferente → 409 `idempotency_conflict` (ADR-021). Chave ausente/inválida → 422. |
 | RN-CHK-007 | Geração do PIX acontece após o commit do pedido. Se o gateway falhar, o pedido permanece `pending_payment` e a tela oferece "Gerar PIX novamente" (idempotente por pedido) até a expiração. |
 | RN-CHK-008 | Após criar o pedido, o carrinho é **esvaziado** (itens convertidos). Se o pedido for cancelado/expirar, o cliente pode usar "Comprar novamente". |
-| RN-CHK-009 | Rate limit no checkout (ADR-006); ex.: 10 req/min por cliente. |
+| RN-CHK-009 | Rate limit no checkout (ADR-006): **5/min e 30/h** por cliente (API.md §1.8 — ver ADR-028); máximo de 3 pedidos `pending_payment` simultâneos (409 `too_many_pending_orders`, ADR-021). |
 | RN-CHK-010 | Valor mínimo de pedido configurável (`min_order_cents`, padrão R$ 0,00). |
 | RN-CHK-011 | O pedido copia: dados do cliente (nome, CPF/CNPJ, razão social, IE, e-mail, telefone), endereço, método/prazo/preço de frete, e por item: nome, SKU, unidade, preço unit., `price_source`, quantidade, largura, altura, peças, área calculada e faturada, peso, desconto rateado, total (ADR-016). |
 
@@ -603,13 +606,13 @@ pending_payment ─► paid ─► processing ─► shipped ─► delivered
 | RN-PED-014 | `processing` → `ready_for_pickup` | `warehouse`, `admin` | Método `pickup` | Aviso ao cliente com endereço/horário da loja |
 | RN-PED-015 | `shipped` → `delivered` | `warehouse`, `admin` (Sistema no futuro via rastreio) | — | `delivered_at` |
 | RN-PED-016 | `ready_for_pickup` → `picked_up` | `warehouse`, `seller`, `admin` | Registrar nome e documento de quem retirou | `picked_up_at` |
-| RN-PED-017 | `paid` / `processing` → `cancelled` | `finance`, `admin` | Motivo obrigatório; estorno bem-sucedido | `refund` total no gateway → `payment_status = refunded`; `return` no estoque |
+| RN-PED-017 | `paid` / `processing` → `cancelled` | `finance`, `manager`/`super-admin` (`orders.cancel_paid`) | Motivo obrigatório | cancelamento efetivado de imediato; `return` no estoque; estorno total **assíncrono** com retry (`payment_refunds`) → `payment_status = refunded` (ver ADR-028) |
 | RN-PED-018 | Qualquer outro caminho (ex.: `shipped` → `cancelled`, `delivered` → qualquer, `cancelled` → qualquer) | ninguém | — | 409 (exceção controlada em RN-PAG-012, ver Q-06) |
 
 | ID | Regra |
 |---|---|
 | RN-PED-020 | Cliente só pode cancelar pedido **`pending_payment`**. Em `paid`/`processing` vê "Solicitar cancelamento" (gera registro/notificação para a loja; não altera status). |
-| RN-PED-021 | Cancelamento de pedido pago: se o estorno no gateway falhar, o cancelamento **não é efetivado** (status inalterado), exibindo erro ao operador; nova tentativa possível. |
+| RN-PED-021 | Cancelamento de pedido pago: o cancelamento é **efetivado** e o estorno é processado de forma **assíncrona com retry**; falha definitiva do estorno fica visível ao `finance` (alerta + painel) para tratamento (ver ADR-028; substitui "não efetivar"). |
 | RN-PED-022 | Pedido `shipped`/`delivered` não pode ser cancelado no MVP. Devoluções e direito de arrependimento (CDC art. 49 — 7 dias do recebimento) são tratados manualmente pelo atendimento (estorno manual + `in`/`adjust` no estoque) — ver Q-07. |
 | RN-PED-023 | Observações: cliente pode deixar observação no checkout (até 500 caracteres, ex.: "cortar em 2 peças"); operador pode registrar notas internas (não visíveis ao cliente). |
 | RN-PED-024 | Retirada: exige conferência do número do pedido e nome/documento de quem retira (cliente ou terceiro autorizado). |
@@ -676,20 +679,23 @@ pending_payment ─► paid ─► processing ─► shipped ─► delivered
 
 | Cidade (IBGE) | CEP exemplo | Retirada | Entrega própria | Tabela por peso | Prazo |
 |---|---|---|---|---|---|
-| Blumenau (4202404) | 89010-000 | R$ 0,00 | R$ 15,00 (grátis acima de R$ 300,00) | — | própria: 1 dia útil |
-| Gaspar (4205902) | 89110-000 | R$ 0,00 | R$ 20,00 (grátis acima de R$ 400,00) | — | própria: 1–2 dias úteis |
-| Indaial (4207502) | 89130-000 | R$ 0,00 | R$ 25,00 | — | própria: 2 dias úteis |
-| Pomerode (4213203) | 89107-000 | R$ 0,00 | R$ 25,00 | — | própria: 2 dias úteis |
-| Joinville (4209102) | 89201-000 | R$ 0,00 | — (não atendida) | 0–5 kg R$ 35,00 · 5,001–30 kg R$ 60,00 · 30,001–100 kg R$ 120,00 · > 100 kg: sob consulta | tabela: 3–5 dias úteis |
+| Blumenau (4202404) | 89010-000 | R$ 0,00 | R$ 20,00 (grátis a partir de R$ 500,00) | regional: até 5 kg R$ 15 · até 10 kg R$ 20 · até 20 kg R$ 28; por CEP R$ 18 | própria: 1 dia útil |
+| Gaspar (4205902) | 89110-000 | R$ 0,00 | R$ 30,00 (grátis a partir de R$ 500,00) | SC: R$ 30 + R$ 2/kg (mín. R$ 35) | própria: 1–2 dias úteis |
+| Indaial (4207502) | 89130-000 | R$ 0,00 | R$ 35,00 | SC: R$ 30 + R$ 2/kg | própria: 2 dias úteis |
+| Pomerode (4213203) | 89107-000 | R$ 0,00 | R$ 35,00 | SC: R$ 30 + R$ 2/kg | própria: 2 dias úteis |
+| Joinville (4209102) | 89201-000 | R$ 0,00 | — (não atendida) | regional: R$ 25,00 + R$ 1,50/kg iniciado (até 30 kg) · > 30 kg: sob consulta | tabela: 3–4 dias úteis |
+
+> Valores **alinhados ao seed** (DATABASE.md §7.8 — ver ADR-028; a versão anterior usava
+> Blumenau R$ 15,00 e grátis acima de R$ 300,00).
 
 Exemplos numéricos:
 
 | # | Cenário | Resultado |
 |---|---|---|
-| F1 | Blumenau, subtotal R$ 79,50, 0,9 kg | Retirada R$ 0,00; Entrega própria R$ 15,00 |
-| F2 | Blumenau, subtotal R$ 350,00 | Entrega própria **R$ 0,00** (regra de frete grátis prioridade 1 casa antes da regra padrão) |
-| F3 | Blumenau, subtotal R$ 320,00 com cupom de R$ 30,00 → R$ 290,00 | Entrega própria R$ 15,00 (base para frete grátis é após cupom) |
-| F4 | Joinville, 10,72 kg | Tabela R$ 60,00; retirada R$ 0,00 |
+| F1 | Blumenau, subtotal R$ 79,50, 1,25 kg (5 m de `VIN-BR-122-BR`) | Retirada R$ 0,00; Entrega própria R$ 20,00; regional R$ 15,00; por CEP R$ 18,00 |
+| F2 | Blumenau, subtotal R$ 500,00 | Entrega própria **R$ 0,00** (regra de frete grátis prioridade 10 casa antes da regra padrão) |
+| F3 | Blumenau, subtotal R$ 520,00 com cupom de R$ 30,00 → R$ 490,00 | Entrega própria R$ 20,00 (base para frete grátis é após cupom) |
+| F4 | Joinville, 10,72 kg | Regional R$ 25,00 + 11 × R$ 1,50 = R$ 41,50; retirada R$ 0,00 |
 | F5 | Joinville, 150 kg (ex.: 30 bobinas) | Apenas retirada + "frete sob consulta" |
 | F6 | CEP de Porto Alegre (fora das zonas) | Apenas retirada |
 
@@ -722,14 +728,22 @@ Exemplos numéricos:
 
 | ID | Regra |
 |---|---|
-| RN-ADM-001 | Usuários do painel em `admin_users`, guard `admin`, RBAC via `spatie/laravel-permission` (ADR-002/006). Sem auto-cadastro: criados por `admin`. |
-| RN-ADM-002 | Papéis padrão: `admin` (gerente, tudo), `seller` (vendedor), `warehouse` (estoquista/expedição), `finance` (financeiro). Um usuário pode ter mais de um papel. Permissões são atribuídas a papéis; o `admin` pode criar papéis customizados. |
-| RN-ADM-003 | Deve existir sempre **≥ 1 admin ativo**; o sistema impede remover/desativar o último. Usuário não pode remover o próprio papel `admin`. |
-| RN-ADM-004 | Senha ≥ 12 caracteres; bloqueio após 5 tentativas/min; sessão expira após 2 h de inatividade. 2FA (TOTP) recomendado — fora do MVP (ver roadmap). |
+| RN-ADM-001 | Usuários do painel em `admin_users`, guard `admin`, RBAC via `spatie/laravel-permission` (ADR-002/006). Sem auto-cadastro: criados (por convite) por quem tem `admin_users.manage`. |
+| RN-ADM-002 | Papéis do seed (ver ADR-023/027): `super-admin` (Super Admin, tudo via `Gate::before`), `manager` (Gerente, tudo exceto `admin_users.manage`), `seller` (Vendedor), `warehouse` (Estoque/Expedição), `finance` (Financeiro). Um usuário pode ter mais de um papel. Permissões são atribuídas a papéis; somente `super-admin` administra usuários e papéis e pode criar papéis customizados. |
+| RN-ADM-003 | Deve existir sempre **≥ 1 `super-admin` ativo**; o sistema impede remover/desativar o último. Usuário não pode alterar os próprios papéis. |
+| RN-ADM-004 | Senha ≥ 12 caracteres; bloqueio após 5 tentativas/min; sessão expira após **30 min de inatividade** ou **8 h** absolutas (ver ADR-023). 2FA (TOTP) recomendado — fora do MVP (ver roadmap). |
 | RN-ADM-005 | Toda ação de escrita no painel gera `audit_logs` (ator, ação, entidade, diff sem dados sensíveis, IP, request_id) (ADR-016). |
 | RN-ADM-006 | Operador vê dados pessoais completos (CPF/CNPJ) apenas com `customers.view_sensitive`; demais veem mascarado. |
 
 **Matriz de permissões** (✔ = permitido; 👁 = somente leitura; — = negado):
+
+> **Canônico (ver ADR-023/027/028):** o catálogo final de permissões e a atribuição por papel
+> estão em **API.md §6.1–§6.2**. A coluna `admin` abaixo corresponde a `manager` (e
+> `super-admin`); células parciais foram materializadas como permissões próprias:
+> `coupons.manage` ("só cupons"), `orders.pickup` ("só `picked_up`"), `reports.sales` /
+> `reports.inventory` ("👁 vendas / estoque"); `pricing.manage` (tabelas e preços de cliente)
+> separa-se de `prices.manage` (preço base/faixas); `customers.update` (editar/bloquear) separa-se
+> de `customers.manage` (corrigir documento/anonimizar).
 
 | Permissão (`name`) | Descrição | admin | seller | warehouse | finance |
 |---|---|---|---|---|---|

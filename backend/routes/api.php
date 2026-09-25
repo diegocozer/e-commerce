@@ -9,6 +9,6 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware('throttle:health')->group(function (): void {
-    Route::get('/health', [HealthController::class, 'ready'])->name('health');
+    Route::get('/health', [HealthController::class, 'show'])->name('health');
     Route::get('/health/live', [HealthController::class, 'live'])->name('health.live');
 });

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Settings\Models;
 
 use Database\Factories\Settings\SettingFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -33,9 +34,20 @@ class Setting extends Model
     protected function casts(): array
     {
         return [
-            'value' => 'json',
             'is_public' => 'boolean',
         ];
+    }
+
+    /**
+     * Any JSON value, including null (stored as the JSON literal `null`, since
+     * the column is NOT NULL). Not a plain `json` cast because it would write SQL NULL.
+     */
+    protected function value(): Attribute
+    {
+        return Attribute::make(
+            get: static fn (?string $value): mixed => $value === null ? null : json_decode($value, true, flags: JSON_THROW_ON_ERROR),
+            set: static fn (mixed $value): string => json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+        );
     }
 
     protected static function newFactory(): SettingFactory

@@ -408,10 +408,13 @@ retirada:                                     "{method_id}:pickup"           ex.
 
 ### 3.2 API pública
 
-`POST /api/v1/shipping/quotes` — rate limit `shipping-quote` (30/min por IP + cart token).
-Carrinho identificado por sessão (cliente logado) ou `X-Cart-Token` (ADR-007).
+`POST /api/v1/cart/shipping-quote` — rate limit `shipping-quote` (**10/min**) (path e limites
+conforme API.md §3.B/§1.8 — ver ADR-028; substitui `POST /shipping/quotes` 30/min).
+Carrinho identificado por sessão (cliente logado) ou `X-Cart-Token` (ADR-007). A resposta
+vem dentro do `Cart` (`shipping_quote: ShippingQuote`, API.md §2.5/§2.6); o formato de
+`ShippingQuote`/`ShippingOption` abaixo é o mesmo.
 
-Request:
+Request (um de `postal_code` ou `address_uuid`):
 
 ```json
 { "postal_code": "89010-100" }
@@ -492,8 +495,9 @@ Forma resumida (equivalente ao exemplo do briefing), apenas ilustrativa:
 - CEP com formato inválido ⇒ `422 {errors: {postal_code: ["CEP inválido."]}}`.
 - Carrinho vazio ⇒ `422 {errors: {cart: ["Carrinho vazio."]}}`.
 
-Opcional (recomendado, mesma engine): `POST /api/v1/shipping/estimate` na página de
-produto com `{variant_id, quantity, width_m?, height_m?, pieces?, postal_code}`; monta
+Estimativa na página de produto (mesma engine): `POST /api/v1/shipping/quote` (rate limit
+`shipping-estimate`, 30/min — API.md §3.A, ADR-028)
+com `{variant_id, quantity, width_m?, height_m?, pieces?, postal_code}`; monta
 um `ShippingRequest` de uma linha com `subtotalCents` = total da linha resolvido pelo
 `PriceResolver`, `couponFreeShipping = false`, **não persiste** cotação (`quote_id: null`).
 
@@ -1032,6 +1036,9 @@ Colunas adicionais sugeridas **[SHIP-Δ]**: `orders.tracking_code varchar(100) n
 
 #### 5.1.1 Itens a reconciliar com `DATABASE.md`
 
+> **Resolvido:** aceito integralmente pela ADR-025; DATABASE.md já foi alinhado. Lista mantida
+> como histórico.
+
 1. `shipping_methods`: + `weight_basis`, `cubic_divisor`, `handling_days`,
    `accepts_free_shipping_coupon` (e opcional `pickup_opening_hours`).
 2. `shipping_rules`: nomes `min_subtotal_cents`/`max_subtotal_cents`,
@@ -1405,8 +1412,9 @@ incrementa `shipping:config:version` (observer nos models). Testes usam cache `a
 ## 7. Validação no checkout
 
 O cliente envia em `POST /api/v1/checkout` (com `Idempotency-Key`, ADR-009):
-`shipping_quote_id`, `shipping_option_id` e o endereço (`address_id` ou endereço novo).
-**Qualquer campo de preço de frete enviado pelo cliente é ignorado** (ADR-012).
+`shipping_quote_id`, `shipping_option_id` e o endereço salvo (`address_uuid`; endereço novo é
+criado antes via `POST /me/addresses`). **Qualquer campo de preço de frete enviado pelo
+cliente é rejeitado com 422 `prohibited`, sem efeito** (ADR-012; API.md §1.7 — ver ADR-028).
 
 ```text
 function validateShippingForCheckout(cart, customer, address, quoteId, optionId):
@@ -1527,8 +1535,9 @@ no próximo dia útil; exclui sábados e domingos. Feriados: tabela futura
 - Fluxo de status (ADR-008): `paid → processing → ready_for_pickup → picked_up`.
   - Admin "Marcar pronto para retirada" ⇒ `ready_for_pickup`, e-mail ao cliente com
     endereço, horário e número do pedido.
-  - Admin "Confirmar retirada" ⇒ `picked_up`, com `picked_up_by_name` opcional
-    (sem documento completo, ADR-016).
+  - Admin "Confirmar retirada" ⇒ `picked_up`, com `picked_up_by_name` **e**
+    `picked_up_by_document` **obrigatórios** (documento exibido mascarado; revelação
+    auditada) — API.md §3.G.9, D-13 (ver ADR-028).
   - Pedidos de retirada **não** passam por `shipped/delivered`; pedidos de entrega não
     passam por `ready_for_pickup`. A máquina de estados do Order valida pelo
     `orders.shipping_method_type`.
@@ -1537,28 +1546,29 @@ no próximo dia útil; exclui sábados e domingos. Feriados: tabela futura
 
 ## 10. Operações do painel (admin)
 
-Permissões (`spatie/laravel-permission`, guard `admin`): `shipping.view`,
-`shipping.manage`, `shipping.simulate`. Todas as alterações geram `audit_logs`
-(credenciais de transportadora **nunca** entram no diff).
+Permissão (`spatie/laravel-permission`, guard `admin`): **`shipping.manage`** cobre leitura,
+escrita e simulador (API.md §6.1/§6.3 — ver ADR-028; `shipping.view`/`shipping.simulate` não
+existem). Todas as alterações geram `audit_logs` (credenciais de transportadora **nunca**
+entram no diff). Paths e payloads canônicos: API.md §3.G.11 (edição por `PATCH`).
 
 | Endpoint | Descrição |
 |---|---|
-| `GET/POST /api/v1/admin/shipping/carriers`, `GET/PUT/DELETE …/{id}` | CRUD. `credentials` write-only (resposta traz `has_credentials: true`). `driver` validado contra `CarrierRegistry::has()`. |
+| `GET/POST /api/v1/admin/shipping/carriers`, `GET/PATCH/DELETE …/{id}`, `POST …/{id}/test` | CRUD. `credentials` write-only (resposta traz `has_credentials: true`). `driver` validado contra `CarrierRegistry::has()`. |
 | `GET …/carriers/drivers` | Lista drivers registrados. |
-| `GET/POST /api/v1/admin/shipping/methods`, `GET/PUT/DELETE …/{id}` | CRUD. `type` imutável após criação. CHECKs de carrier. |
+| `GET/POST /api/v1/admin/shipping/methods`, `GET/PATCH/DELETE …/{id}` | CRUD. `type` imutável após criação. CHECKs de carrier. |
 | `PUT …/methods/reorder` | `{ids: [...]}` define `position`. |
-| `GET/POST /api/v1/admin/shipping/zones`, `GET/PUT/DELETE …/{id}` | Zona com localizações aninhadas no payload: `{name, is_active, postal_ranges:[{start,end}], cities:[{ibge_code}], states:["SC"]}`; PUT substitui as localizações (sync). Aceita CEP com máscara. Aviso (não erro) para faixas sobrepostas. |
+| `GET/POST /api/v1/admin/shipping/zones`, `GET/PATCH/DELETE …/{id}`, `POST …/{id}/test` | Zona com localizações aninhadas no payload (nomes de campo em API.md §3.G.11); coleções enviadas no PATCH substituem as localizações (sync). Aceita CEP com máscara. Aviso (não erro) para faixas sobrepostas. |
 | `GET /api/v1/admin/shipping/cities?search=blum&state=SC` | Busca em `ibge_cities` (unaccent). |
-| `GET/POST /api/v1/admin/shipping/rules?method_id=`, `GET/PUT/DELETE …/{id}` | CRUD. Valores monetários em centavos, pesos em gramas. Validação: `method.type ∈ {own_delivery, table_rate}`; campos exigidos por `price_type`. |
+| `GET/POST /api/v1/admin/shipping/rules?method_id=`, `GET/PATCH/DELETE …/{id}`, `POST …/reorder` | CRUD. Valores monetários em centavos, pesos em gramas. Validação: `method.type ∈ {own_delivery, table_rate}`; campos exigidos por `price_type`. |
 | `POST /api/v1/admin/shipping/rules/{id}/duplicate` | Facilita tabelas por faixa. |
 | `POST /api/v1/admin/shipping/simulate` | **Simulador de frete** (abaixo). Não persiste. |
-| `GET /api/v1/admin/shipping/quotes/{id}` | Consulta de cotação (suporte), inclui `unavailable`. |
+| `GET /api/v1/admin/shipping/quotes/{uuid}` | Consulta de cotação (suporte), inclui `unavailable`. |
 
-Exclusão de zona referenciada por qualquer regra (FK RESTRICT) ⇒ 409 com a lista de regras; transportadora referenciada por método ⇒ 409 (desativar com `is_active`).
+Exclusão de zona referenciada por qualquer regra (FK RESTRICT) ⇒ 409 `resource_in_use` com `blockers`; transportadora referenciada por método ⇒ 409 `resource_in_use` (desativar com `is_active`).
 
 ### 10.1 Simulador
 
-Request (um de `cart_id` ou `items`):
+Request (exatamente um de `items`, `order_id` ou `logistics_override` — API.md §3.G.11, ver ADR-028):
 
 ```json
 {
@@ -1574,8 +1584,8 @@ Request (um de `cart_id` ou `items`):
 }
 ```
 
-Também aceita `logistics_override: {total_weight_grams, total_volume_cm3, largest_dimension_cm}`
-para testar tabelas sem montar carrinho.
+`logistics_override: {total_weight_grams, total_volume_cm3, largest_dimension_cm}` testa
+tabelas sem montar carrinho; `order_id` reproduz a logística de um pedido existente.
 
 Resposta: o `ShippingQuoteResult` completo **com** `unavailable` e `trace`:
 
@@ -1726,7 +1736,7 @@ Blumenau `89010100` resolvido.
 | T10 | Frete grátis 500,00 | subtotal 50000 | entrega própria 0, `is_free=true`, `free_reason=rule`, `original_price_cents=2000` |
 | T11 | Grátis não vaza cobertura | subtotal 50000, CEP de SP | entrega própria `out_of_coverage` |
 | T12 | Entrega própria por cidade | Gaspar / Indaial | 3000 / 3500 |
-| T13 | Retirada | qualquer CEP | preço 0, endereço das settings, label "Disponível em 1 dia útil após o pagamento" |
+| T13 | Retirada | qualquer CEP | preço 0, endereço das colunas `pickup_*` do método (§9), label "Disponível em 1 dia útil após o pagamento" |
 | T14 | Item `pickup_only` | um produto `pickup_only=true` | só retirada; demais `pickup_only_items` |
 | T15 | Transportadora ok | `FakeCarrier mode=ok` | opção com preço do fake, prazo + `handling_days`, `carrier` preenchido |
 | T16 | Transportadora timeout | `mode=timeout` | opção omitida, `carrier_timeout`, log warning; demais opções presentes; HTTP 200 |
@@ -1745,7 +1755,7 @@ Blumenau `89010100` resolvido.
 | T29 | Hash mismatch | alterar quantidade no carrinho após cotar | recotação; 409 se preço diferente |
 | T30 | CEP do endereço ≠ CEP cotado | endereço em Gaspar, cotação Blumenau | 409 `shipping_postal_code_changed` |
 | T31 | Quote de outro cliente | `quote_id` de outro customer | 409 `shipping_quote_invalid`; nenhum dado da outra cotação vazado |
-| T32 | Preço vindo do cliente | body com `shipping_price_cents: 1` | ignorado; pedido usa preço do servidor |
+| T32 | Preço vindo do cliente | body com `shipping_price_cents: 1` | **422 `prohibited`**, nenhum pedido (API.md §1.7 — ver ADR-028) |
 | T33 | Regra alterada com quote válida | quote válida, admin altera regra 100 para 2200 | 409 `shipping_price_changed` (métodos locais sempre recalculados) |
 | T34 | Lookup falho — faixa | ViaCEP falha; método 4 | regra 300 aplica (1800) |
 | T35 | Lookup falho — cidade | ViaCEP falha; métodos 2 e 3 | `destination_unresolved`; retirada disponível |
@@ -1767,7 +1777,7 @@ Blumenau `89010100` resolvido.
 | T51 | Orçamento de carriers | 3 carriers lentos (fake com clock) | após estourar orçamento: `carrier_budget_exceeded` |
 | T52 | Simulador | POST simulate com permissão / sem permissão | trace com reasons / 403 |
 | T53 | Logs sem PII | qualquer cotação | log contém `cep_prefix` de 5 dígitos, não contém CEP completo |
-| T54 | Rate limit | 31 cotações/min | 429 |
+| T54 | Rate limit | 11 `POST /cart/shipping-quote`/min; 31 `POST /shipping/quote`/min | 429 `too_many_requests` (API.md §1.8) |
 | T55 | Poda | `shipping:prune-quotes` | remove expiradas há > 7 dias |
 
 ---
@@ -1791,7 +1801,7 @@ return [
         'cache_days'            => 30,
         'not_found_cache_hours' => 24,
     ],
-    'rate_limit_per_minute'      => 30,
+    // rate limits ficam nos limiters `shipping-quote` (10/min) e `shipping-estimate` (30/min) — API.md §1.8
 ];
 ```
 

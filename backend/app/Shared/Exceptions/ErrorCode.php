@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Shared\Exceptions;
 
-/** Minimum machine error codes of ADR-020 (responses other than 422). */
+/** Machine error codes of ADR-020 / API.md §1.6 (responses other than plain 422). */
 enum ErrorCode: string
 {
     case InsufficientStock = 'insufficient_stock';
@@ -22,6 +22,17 @@ enum ErrorCode: string
     case Unauthenticated = 'unauthenticated';
     case TooManyRequests = 'too_many_requests';
     case AdminSessionExpired = 'admin_session_expired';
+    case AccountDisabled = 'account_disabled';
+    case CartNotFound = 'cart_not_found';
+    case CartInvalid = 'cart_invalid';
+    case ShippingQuoteInvalid = 'shipping_quote_invalid';
+    case ShippingQuoteChanged = 'shipping_quote_changed';
+    case ShippingPostalCodeChanged = 'shipping_postal_code_changed';
+    case ShippingOptionInvalid = 'shipping_option_invalid';
+    case ShippingPriceChanged = 'shipping_price_changed';
+    case ResourceInUse = 'resource_in_use';
+    case StaleResource = 'stale_resource';
+    case PostalCodeLookupUnavailable = 'postal_code_lookup_unavailable';
     case CsrfTokenMismatch = 'csrf_token_mismatch';
     case MethodNotAllowed = 'method_not_allowed';
     case BadRequest = 'bad_request';

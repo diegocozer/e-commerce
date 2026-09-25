@@ -8,8 +8,8 @@ use App\Shared\Providers\ModuleServiceProvider;
 
 final class ReportsServiceProvider extends ModuleServiceProvider
 {
-    /** @var array<class-string, class-string|\Closure> */
-    protected array $bindings = [];
+    /** @var array<class-string, class-string> interface => implementation (singletons) */
+    public array $singletons = [];
 
     /** @var array<class-string, list<class-string>> */
     protected array $listen = [];

@@ -21,7 +21,7 @@ final class HealthController
         return new JsonResponse(['status' => 'ok']);
     }
 
-    public function ready(): JsonResponse
+    public function show(): JsonResponse
     {
         $checks = [
             'database' => $this->check(static fn (): bool => DB::selectOne('select 1 as ok')?->ok === 1),
