@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Catalog\Models;
 
+use App\Shared\Casts\JsonObjectCast;
 use App\Modules\Inventory\Models\Inventory;
 use App\Modules\Pricing\Models\CustomerPrice;
 use App\Modules\Pricing\Models\PriceTier;
@@ -54,7 +55,7 @@ class ProductVariant extends Model
     protected function casts(): array
     {
         return [
-            'attributes' => 'array',
+            'attributes' => JsonObjectCast::class,
             'price_cents' => 'integer',
             'promo_price_cents' => 'integer',
             'promo_starts_at' => 'immutable_datetime',

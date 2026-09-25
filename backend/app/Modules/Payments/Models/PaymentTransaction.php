@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payments\Models;
 
+use App\Shared\Casts\JsonObjectCast;
 use App\Modules\Payments\Enums\PaymentStatus;
 use App\Modules\Payments\Enums\PaymentTransactionType;
 use Database\Factories\Payments\PaymentTransactionFactory;
@@ -43,7 +44,7 @@ class PaymentTransaction extends Model
             'status_before' => PaymentStatus::class,
             'status_after' => PaymentStatus::class,
             'amount_cents' => 'integer',
-            'payload' => 'array',
+            'payload' => JsonObjectCast::class,
             'created_at' => 'immutable_datetime',
         ];
     }

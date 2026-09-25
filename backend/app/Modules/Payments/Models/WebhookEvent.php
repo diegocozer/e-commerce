@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payments\Models;
 
+use App\Shared\Casts\JsonObjectCast;
 use App\Modules\Payments\Enums\PaymentProvider;
 use App\Modules\Payments\Enums\WebhookEventStatus;
 use Database\Factories\Payments\WebhookEventFactory;
@@ -38,7 +39,7 @@ class WebhookEvent extends Model
     {
         return [
             'provider' => PaymentProvider::class,
-            'payload' => 'array',
+            'payload' => JsonObjectCast::class,
             'signature_valid' => 'boolean',
             'status' => WebhookEventStatus::class,
             'attempts' => 'integer',

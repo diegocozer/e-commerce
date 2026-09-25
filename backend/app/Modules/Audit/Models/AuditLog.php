@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Audit\Models;
 
+use App\Shared\Casts\JsonObjectCast;
 use App\Shared\Domain\ActorType;
 use Database\Factories\Audit\AuditLogFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,8 +45,8 @@ class AuditLog extends Model
     {
         return [
             'actor_type' => ActorType::class,
-            'old_values' => 'array',
-            'new_values' => 'array',
+            'old_values' => JsonObjectCast::class,
+            'new_values' => JsonObjectCast::class,
             'created_at' => 'immutable_datetime',
         ];
     }

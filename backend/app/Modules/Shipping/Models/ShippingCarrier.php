@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Shipping\Models;
 
+use App\Shared\Casts\JsonObjectCast;
 use Database\Factories\Shipping\ShippingCarrierFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -36,7 +37,7 @@ class ShippingCarrier extends Model
     {
         return [
             'credentials' => 'encrypted:array',
-            'settings' => 'array',
+            'settings' => JsonObjectCast::class,
             'is_active' => 'boolean',
         ];
     }
