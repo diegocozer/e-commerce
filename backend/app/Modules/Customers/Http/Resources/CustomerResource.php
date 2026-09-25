@@ -7,6 +7,7 @@ namespace App\Modules\Customers\Http\Resources;
 use App\Modules\Customers\Contracts\TermsVersionResolver;
 use App\Modules\Customers\Models\Customer;
 use App\Modules\Customers\Support\CustomerProfile;
+use App\Modules\Customers\Support\Iso;
 use App\Modules\Customers\Support\PriceListLookup;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -53,7 +54,7 @@ final class CustomerResource extends JsonResource
             ],
             'profile_complete' => $missing === [],
             'missing_fields' => $missing,
-            'created_at' => $customer->created_at?->utc()->toIso8601ZuluString(),
+            'created_at' => Iso::dt($customer->created_at),
         ];
     }
 }

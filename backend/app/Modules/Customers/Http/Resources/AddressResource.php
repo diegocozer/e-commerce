@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Customers\Http\Resources;
 
 use App\Modules\Customers\Models\CustomerAddress;
+use App\Modules\Customers\Support\Iso;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -37,7 +38,7 @@ final class AddressResource extends JsonResource
             'reference' => $a->reference,
             'is_default' => $a->is_default,
             'formatted' => self::format($a),
-            'created_at' => $a->created_at?->utc()->toIso8601ZuluString(),
+            'created_at' => Iso::dt($a->created_at),
         ];
     }
 

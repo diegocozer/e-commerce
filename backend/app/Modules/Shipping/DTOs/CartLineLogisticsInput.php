@@ -4,43 +4,31 @@ declare(strict_types=1);
 
 namespace App\Modules\Shipping\DTOs;
 
+use App\Shared\Domain\PackageDimensions;
+use App\Shared\Domain\Quantity;
 use App\Shared\Domain\SaleUnit;
 
 /**
- * One cart/estimate line converted to logistics input (SHIPPING.md §2.3).
- * Built by the Cart module with the billable quantity already resolved.
- * Package dimensions are integer millimetres (use Dimension::cmToMm()).
+ * One cart/estimate line converted to logistics input (SHIPPING.md §2.3,
+ * IMPLEMENTATION_PLAN.md §5.6). Built by Cart with the billable quantity
+ * already resolved. SQUARE_METER weight uses the REAL area
+ * (width × height × pieces, ADR-030), so pass the resolved piece dimensions.
  */
 final readonly class CartLineLogisticsInput
 {
     public function __construct(
         public int $variantId,
         public SaleUnit $saleUnit,
-        public int $billableQuantityMilli,     // UNIT 3 → 3000; 5,5 m → 5500; 2,44 m² → 2440; 1,25 kg → 1250
-        public ?int $widthMm,                  // SQUARE_METER: piece width
-        public ?int $heightMm,                 // SQUARE_METER: piece height
-        public ?int $pieces,                   // SQUARE_METER: number of pieces
-        public ?int $fixedWidthMm,             // material width (required for LINEAR_METER)
-        public ?int $weightGrams,              // product_variants.weight_grams (per sale unit); 0 = missing
-        public ?int $packageLengthMm,
-        public ?int $packageWidthMm,
-        public ?int $packageHeightMm,
-        public ?int $unitsPerPackage,          // null = 1
-        public bool $pickupOnly,               // products.pickup_only
-        public int $lineTotalCents,
-        public string $sku,
-        public ?int $quantityMilli = null,     // what the customer chose (cart_items.quantity), for the request hash
+        public Quantity $billable,              // UNIT 3 → 3.000; 5,5 m → 5.500; 1,25 kg → 1.250
+        public ?int $widthMm,                   // SQUARE_METER: piece width (resolved)
+        public ?int $heightMm,                  // SQUARE_METER: piece height
+        public ?int $pieces,                    // SQUARE_METER: number of pieces
+        public int $weightGrams,                // product_variants.weight_grams per sale unit (0 = missing, except KG)
+        public ?PackageDimensions $package,     // mm; LINEAR/SQUARE: width/height = roll diameter
+        public ?int $unitsPerPackage,           // null = 1
+        public ?int $fixedWidthMm,              // material width (required for LINEAR_METER)
+        public bool $pickupOnly,                // products.pickup_only
+        public string $sku = '',                // for carriers (optional)
+        public int $lineTotalCents = 0,         // declared value for carriers (optional)
     ) {}
-
-    /** @return array{variant_id: int, quantity_milli: int|null, width_mm: int|null, height_mm: int|null, pieces: int|null} */
-    public function itemConfig(): array
-    {
-        return [
-            'variant_id' => $this->variantId,
-            'quantity_milli' => $this->saleUnit === SaleUnit::SquareMeter ? null : ($this->quantityMilli ?? $this->billableQuantityMilli),
-            'width_mm' => $this->widthMm,
-            'height_mm' => $this->heightMm,
-            'pieces' => $this->pieces,
-        ];
-    }
 }
