@@ -34,7 +34,7 @@ export function NotFoundPage({ message, category }: { message?: string; category
           <SearchOutlined />
         </Button>
       </Box>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" sx={{ mb: 4 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4, justifyContent: "center" }}>
         {category ? (
           <Button component={RouterLink} to={category.url_path} variant="outlined">
             Ver produtos de {category.name}

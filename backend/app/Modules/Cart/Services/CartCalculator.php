@@ -65,7 +65,7 @@ final class CartCalculator
             $entry = ['item' => $item, 'variant' => $variant, 'input' => $input, 'billable' => null,
                 'status' => CartLineStatus::Ok, 'message' => null, 'suggestions' => []];
 
-            if ($variant === null || ! $variant->isActive || ! $variant->productIsActive) {
+            if ($variant === null || ! $variant->isSellable()) {
                 $entry['status'] = CartLineStatus::Unavailable;
                 $entry['message'] = 'Produto indisponível.';
             } else {
@@ -214,6 +214,9 @@ final class CartCalculator
     /** SHIPPING.md §2.3: ceil(weight × billable); KG: billable milli-kg are grams. */
     public static function lineWeight(VariantData $variant, BillableQuantity $billable): Weight
     {
+        if ($billable->weightGrams > 0) {
+            return Weight::fromGrams($billable->weightGrams);
+        }
         if ($variant->saleUnit === SaleUnit::Kg) {
             return Weight::fromGrams($billable->billable->milli());
         }
