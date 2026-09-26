@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { setForbiddenHandler, setUnauthorizedHandler } from '@/shared/api/client';
 import { meKey } from '@/shared/auth';
 import { notify } from '@/shared/ui/notify';
@@ -12,13 +12,16 @@ import { notify } from '@/shared/ui/notify';
 export function SessionHandlers() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const location = useLocation();
+  const here = useRef('/');
+  here.current = `${location.pathname}${location.search}`;
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      const here = `${window.location.pathname.replace(/^\/admin/, '') || '/'}${window.location.search}`;
-      if (here.startsWith('/entrar')) return;
+      const current = here.current;
+      if (current.startsWith('/entrar')) return;
       qc.clear();
       qc.setQueryData(meKey, null);
-      navigate(`/entrar?expirada=1&redirect=${encodeURIComponent(here)}`, { replace: true });
+      navigate(`/entrar?expirada=1&redirect=${encodeURIComponent(current)}`, { replace: true });
     });
     setForbiddenHandler(() => {
       notify.error('Você não tem permissão para esta ação.');

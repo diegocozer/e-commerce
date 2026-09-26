@@ -7,8 +7,10 @@ namespace App\Modules\Catalog\Providers;
 use App\Modules\Catalog\Contracts\CatalogQuery;
 use App\Modules\Catalog\Contracts\ProductSearch;
 use App\Modules\Catalog\Contracts\SaleQuantityResolver;
+use App\Modules\Catalog\Contracts\StorefrontSeo;
 use App\Modules\Catalog\Events\ProductSaved;
 use App\Modules\Catalog\Listeners\ReindexProduct;
+use App\Modules\Catalog\Services\CatalogStorefrontSeo;
 use App\Modules\Catalog\Services\CatalogVariantLabelProvider;
 use App\Modules\Catalog\Services\DefaultSaleQuantityResolver;
 use App\Modules\Catalog\Services\EloquentCatalogQuery;
@@ -27,6 +29,7 @@ final class CatalogServiceProvider extends ModuleServiceProvider
         SaleQuantityResolver::class => DefaultSaleQuantityResolver::class,
         ProductSearch::class => PostgresProductSearch::class,
         VariantLabelProvider::class => CatalogVariantLabelProvider::class,
+        StorefrontSeo::class => CatalogStorefrontSeo::class,
     ];
 
     /** @var array<class-string, list<class-string>> */
