@@ -19,7 +19,7 @@ return [
         'Settings' => [],
         'Identity' => [],
         'Audit' => [],
-        'Customers' => [],
+        'Customers' => ['Settings'],
         'Inventory' => ['Settings'],
         'Pricing' => ['Customers'],
         'Shipping' => ['Settings'],

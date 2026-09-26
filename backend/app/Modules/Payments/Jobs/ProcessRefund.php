@@ -13,6 +13,7 @@ use App\Modules\Payments\Models\Payment;
 use App\Modules\Payments\Models\PaymentRefund;
 use App\Modules\Payments\Services\DefaultPaymentService;
 use App\Modules\Payments\Services\PaymentGatewayManager;
+use App\Shared\Domain\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -64,7 +65,7 @@ final class ProcessRefund implements ShouldQueue
         }
 
         $result = $gateways->gateway($payment->provider->value)
-            ->refund((string) $payment->external_id, \App\Shared\Domain\Money::ofCents($refund->amount_cents), $refund->idempotency_key);
+            ->refund((string) $payment->external_id, Money::ofCents($refund->amount_cents), $refund->idempotency_key);
 
         if ($result->status === PaymentRefundStatus::Processing) {
             $this->release(300);

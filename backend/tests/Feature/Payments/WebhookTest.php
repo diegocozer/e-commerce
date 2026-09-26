@@ -8,8 +8,10 @@ use App\Modules\Customers\Models\Customer;
 use App\Modules\Orders\Enums\OrderStatus;
 use App\Modules\Payments\Enums\PaymentStatus;
 use App\Modules\Payments\Enums\WebhookEventStatus;
+use App\Modules\Payments\Exceptions\PaymentNotFound;
 use App\Modules\Payments\Jobs\ProcessWebhookEvent;
 use App\Modules\Payments\Models\WebhookEvent;
+use App\Modules\Payments\Services\DefaultPaymentService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Queue;
@@ -93,9 +95,9 @@ final class WebhookTest extends OrdersTestCase
         $event = WebhookEvent::query()->firstOrFail();
 
         try {
-            (new ProcessWebhookEvent($event->id))->handle(app(\App\Modules\Payments\Services\DefaultPaymentService::class));
+            (new ProcessWebhookEvent($event->id))->handle(app(DefaultPaymentService::class));
             self::fail('expected PaymentNotFound');
-        } catch (\App\Modules\Payments\Exceptions\PaymentNotFound) {
+        } catch (PaymentNotFound) {
         }
         $event->refresh();
         self::assertNull($event->processed_at);

@@ -53,7 +53,7 @@ final class PlaceCheckout
     ) {}
 
     /** @return array{result: array<string, mixed>, replayed: bool} */
-    public function execute(CheckoutData $data): array
+    public function execute(CheckoutData $data, int $attempt = 1): array
     {
         $key = (string) $data->idempotencyKey;
         $fingerprint = $data->fingerprint();
@@ -81,14 +81,14 @@ final class PlaceCheckout
                     throw CheckoutFailed::cartEmpty();
                 }
                 $snapshot = $this->carts->snapshot((int) $cartId, $data->customerId);
-                $calc = $pre;
                 if ($snapshot->hash !== $pre->snapshot->hash || ! $snapshot->subtotal->equals($pre->snapshot->subtotal)) {
-                    $calc = $this->calculator->compute($data, strict: true, snapshot: $snapshot);
-                    $this->assertExpectedTotal($data, $calc);
+                    // The cart changed after the pre-check: never re-quote shipping here (CEP
+                    // lookup/HTTP must stay outside the transaction) — roll back and start over.
+                    return [null, null, null];
                 }
 
-                $order = $this->orders->place($this->placeOrderData($data, $fingerprint, $calc));
-                $payment = $this->payments->createPending($this->paymentRequest($order, $calc));
+                $order = $this->orders->place($this->placeOrderData($data, $fingerprint, $pre));
+                $payment = $this->payments->createPending($this->paymentRequest($order, $pre));
                 $this->carts->markConverted((int) $cartId, $order->id);
 
                 return [$order, $payment, null];
@@ -105,6 +105,15 @@ final class PlaceCheckout
 
         if ($replayOf !== null) {
             return $this->replay($replayOf, $fingerprint);
+        }
+        if ($order === null) {
+            // cart changed between the pre-check and the lock: recalculate outside the
+            // transaction (errors surface normally); after one retry ask for confirmation.
+            if ($attempt >= 2) {
+                throw CheckoutFailed::priceChanged($this->calculator->compute($data, strict: false)->summary);
+            }
+
+            return $this->execute($data, $attempt + 1);
         }
 
         $payment = $this->initiate($order, $payment);

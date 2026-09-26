@@ -27,7 +27,7 @@ final class ProductRequest extends FormRequest
         $data = [];
         foreach (self::DECIMAL_FIELDS as $key) {
             if (is_int($this->input($key)) || is_float($this->input($key))) {
-                $data[$key] = self::str($this->input($key));
+                $data[$key] = self::numberString($this->input($key));
             }
         }
         if (is_array($this->input('variants'))) {
@@ -38,7 +38,7 @@ final class ProductRequest extends FormRequest
                 }
                 foreach (self::VARIANT_DECIMALS as $key) {
                     if (isset($v[$key]) && (is_int($v[$key]) || is_float($v[$key]))) {
-                        $variants[$i][$key] = self::str($v[$key]);
+                        $variants[$i][$key] = self::numberString($v[$key]);
                     }
                 }
                 if (isset($v['sku']) && is_string($v['sku'])) {
@@ -140,7 +140,7 @@ final class ProductRequest extends FormRequest
         ];
     }
 
-    private static function str(int|float $v): string
+    private static function numberString(int|float $v): string
     {
         if (is_int($v)) {
             return (string) $v;

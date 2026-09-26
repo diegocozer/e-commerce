@@ -11,7 +11,7 @@ import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/features/auth';
 import { ReorderSuggestions } from '@/features/account';
@@ -77,10 +77,6 @@ export default function CartPage() {
   const reorderReport = (location.state as { reorder?: ReorderReport } | null)?.reorder ?? null;
   const [cepInput, setCepInput] = useState(formatCEP(shipping.postalCode ?? preferred ?? ''));
   const [cepError, setCepError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!cepInput && (shipping.postalCode || preferred)) setCepInput(formatCEP(shipping.postalCode ?? preferred ?? ''));
-  }, [preferred, shipping.postalCode, cepInput]);
 
   if (base.isLoading) {
     return (

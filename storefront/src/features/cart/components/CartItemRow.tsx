@@ -7,7 +7,7 @@ import Link from '@mui/material/Link';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router';
 import { describeError, toApiError } from '@/shared/api/errors';
 import type { CartItem, StockIssue } from '@/shared/api/types';
@@ -43,16 +43,16 @@ export function CartItemRow({ item, highlight }: { item: CartItem; highlight?: b
   const [draft, setDraft] = useState(current);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const lastSent = useRef(current);
-
-  useEffect(() => {
+  // Valor do servidor mudou → sincroniza o rascunho (padrão "estado derivado" do React).
+  const [prevCurrent, setPrevCurrent] = useState(current);
+  if (prevCurrent !== current) {
+    setPrevCurrent(current);
     setDraft(current);
-    lastSent.current = current;
-  }, [current]);
+  }
 
   // Debounce 500 ms (UX §4.5)
   useEffect(() => {
-    if (draft === lastSent.current || !item.rules) return;
+    if (draft === current || !item.rules || update.isPending) return;
     const id = setTimeout(() => {
       const parsed = parseDecimal(draft, m2 ? 0 : 3);
       if (!parsed.ok || parsed.milli <= 0) {
@@ -66,7 +66,6 @@ export function CartItemRow({ item, highlight }: { item: CartItem; highlight?: b
         return;
       }
       setError(null);
-      lastSent.current = draft;
       const body = m2 ? { pieces: parsed.milli / 1000 } : { quantity: milliToNumber(parsed.milli) };
       update.mutate(
         { id: item.id, body },
@@ -78,7 +77,6 @@ export function CartItemRow({ item, highlight }: { item: CartItem; highlight?: b
               setError(issue ? `Disponível: ${formatQuantity(issue.available_quantity, item.sale_unit)}.` : e.message);
             } else setError(e.fieldMessage('quantity') ?? e.fieldMessage('pieces') ?? describeError(e));
             setDraft(current);
-            lastSent.current = current;
           },
         },
       );

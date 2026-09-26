@@ -18,6 +18,12 @@ final class CartItemsTest extends TestCase
 
     protected bool $seed = true;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->ensureSeeded();
+    }
+
     public function test_guest_adds_vinyl_5_m_and_gets_7950(): void
     {
         $response = $this->addItem(['variant_id' => $this->variantId('VIN-BR-122-BR'), 'quantity' => 5]);

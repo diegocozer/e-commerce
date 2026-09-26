@@ -27,13 +27,13 @@ export function AddressStep({ customer, selected, onSelect, onBack, onContinue, 
 
   useEffect(() => {
     if (!q.data) return;
-    if (!q.data.length) setAdding(true);
-    else if (!selected || !q.data.some((a) => a.uuid === selected)) onSelect((q.data.find((a) => a.is_default) ?? q.data[0]).uuid);
+    if (q.data.length && (!selected || !q.data.some((a) => a.uuid === selected))) onSelect((q.data.find((a) => a.is_default) ?? q.data[0]).uuid);
   }, [q.data, selected, onSelect]);
 
   if (q.isLoading) return <Box aria-busy="true"><Skeleton height={80} /><Skeleton height={80} /></Box>;
   if (q.error) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   const addresses = q.data ?? [];
+  const showForm = adding || addresses.length === 0;
 
   return (
     <Box>
@@ -58,7 +58,7 @@ export function AddressStep({ customer, selected, onSelect, onBack, onContinue, 
           );
         })}
       </Box>
-      {adding ? (
+      {showForm ? (
         <Box sx={{ mt: 4, p: 4, border: 1, borderColor: 'divider', borderRadius: 3, bgcolor: 'background.paper' }}>
           <Typography variant="h4" component="h3" sx={{ mb: 3 }}>Novo endereço</Typography>
           <AddressForm
@@ -79,7 +79,7 @@ export function AddressStep({ customer, selected, onSelect, onBack, onContinue, 
       )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 6 }}>
         <Button variant="outlined" onClick={onBack}>‹ Voltar</Button>
-        <Button onClick={onContinue} disabled={!selected || adding}>Continuar ›</Button>
+        <Button onClick={onContinue} disabled={!selected || showForm}>Continuar ›</Button>
       </Box>
     </Box>
   );

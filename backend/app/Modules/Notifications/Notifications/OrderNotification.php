@@ -8,10 +8,11 @@ use App\Modules\Notifications\Channels\WhatsAppChannel;
 use App\Modules\Notifications\DTOs\WhatsAppMessage;
 use App\Modules\Orders\Models\Order;
 use App\Modules\Orders\Models\OrderItem;
-use App\Shared\Domain\Quantity;
-use App\Shared\Domain\SaleUnit;
 use App\Modules\Settings\Contracts\SettingsRepository;
 use App\Modules\Settings\Enums\SettingKey;
+use App\Shared\Domain\Quantity;
+use App\Shared\Domain\SaleUnit;
+use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -158,7 +159,7 @@ abstract class OrderNotification extends Notification implements ShouldQueue
         return 'R$ '.number_format($cents / 100, 2, ',', '.');
     }
 
-    protected static function localTime(?\Carbon\CarbonInterface $date): string
+    protected static function localTime(?CarbonInterface $date): string
     {
         return $date === null ? '' : $date->copy()->setTimezone('America/Sao_Paulo')->format('d/m/Y H:i');
     }

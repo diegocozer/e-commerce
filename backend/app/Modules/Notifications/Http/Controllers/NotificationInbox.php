@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Notifications\HasDatabaseNotifications;
 
 /** Shared inbox logic for /me/notifications and /admin/notifications (only the authenticated user's). */
 trait NotificationInbox
@@ -22,7 +23,7 @@ trait NotificationInbox
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
         ]);
-        /** @var Model&\Illuminate\Notifications\HasDatabaseNotifications $user */
+        /** @var Model&HasDatabaseNotifications $user */
         $user = $request->user($this->guard());
         $query = $user->notifications()->latest()->orderByDesc('id');
         if (in_array((string) ($data['unread'] ?? ''), ['1', 'true'], true)) {

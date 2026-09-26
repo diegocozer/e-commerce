@@ -37,7 +37,7 @@ final class ShippingStoreEndpointsTest extends TestCase
     public function test_fake_resolves_every_cep_of_known_city_ranges(): void
     {
         foreach (['89012000' => '4202404', '89015200' => '4202404', '89201000' => '4209102', '89112345' => '4205902', '01311000' => '3550308'] as $cep => $ibge) {
-            self::assertSame($ibge, app(PostalCodeLookup::class)->lookup($cep)->cityIbgeCode, $cep);
+            self::assertSame($ibge, app(PostalCodeLookup::class)->lookup((string) $cep)->cityIbgeCode, (string) $cep);
         }
     }
 

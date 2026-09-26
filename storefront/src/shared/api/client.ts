@@ -1,4 +1,4 @@
-import axios, { AxiosHeaders, type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
+import { AxiosHeaders, create as createAxios, isAxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
 import { uuidv4 } from '../lib/uuid';
 import { updateServerClock } from '../lib/serverClock';
 import { acceptsCartToken, clearCartToken, getCartToken, setCartToken } from './cartToken';
@@ -14,17 +14,17 @@ export const API_BASE = '/api/v1';
 const MUTATING = new Set(['post', 'put', 'patch', 'delete']);
 
 interface RetryFlags {
-  _csrfRetried?: boolean;
-  _cartRetried?: boolean;
+  cvCsrfRetried?: boolean;
+  cvCartRetried?: boolean;
   /** Não enviar X-Cart-Token nesta requisição. */
-  _skipCartToken?: boolean;
+  cvSkipCartToken?: boolean;
 }
 type Config = InternalAxiosRequestConfig & RetryFlags;
 
 export const CART_EXPIRED_EVENT = 'cv:cart-expired';
 export const UNAUTHENTICATED_EVENT = 'cv:unauthenticated';
 
-export const http = axios.create({
+export const http = createAxios({
   baseURL: API_BASE,
   withCredentials: true,
   // Tratamos o XSRF manualmente (abaixo) para controlar o fluxo 419.
@@ -43,7 +43,7 @@ http.interceptors.request.use(async (config: Config) => {
     if (token) headers.set('X-XSRF-TOKEN', token);
   }
   const url = config.url ?? '';
-  if (!config._skipCartToken && acceptsCartToken(url)) {
+  if (!config.cvSkipCartToken && acceptsCartToken(url)) {
     const cartToken = getCartToken();
     if (cartToken) headers.set('X-Cart-Token', cartToken);
   }
@@ -60,21 +60,21 @@ http.interceptors.response.use(
     return response;
   },
   async (error: unknown) => {
-    if (axios.isAxiosError(error) && error.config) {
+    if (isAxiosError(error) && error.config) {
       const config = error.config as Config;
       const status = error.response?.status;
       const body = error.response?.data as { code?: string } | undefined;
       updateServerClock(error.response?.headers?.['date'] as string | undefined);
 
-      if (status === 419 && !config._csrfRetried) {
-        config._csrfRetried = true;
+      if (status === 419 && !config.cvCsrfRetried) {
+        config.cvCsrfRetried = true;
         await refreshCsrfCookie().catch(() => undefined);
         return http.request(config);
       }
-      if (status === 404 && body?.code === 'cart_not_found' && !config._cartRetried) {
+      if (status === 404 && body?.code === 'cart_not_found' && !config.cvCartRetried) {
         clearCartToken();
-        config._cartRetried = true;
-        config._skipCartToken = true;
+        config.cvCartRetried = true;
+        config.cvSkipCartToken = true;
         const headers = AxiosHeaders.from(config.headers);
         headers.delete('X-Cart-Token');
         config.headers = headers;

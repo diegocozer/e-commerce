@@ -12,7 +12,6 @@ use App\Modules\Orders\Http\Resources\Admin\AdminOrderResource;
 use App\Modules\Orders\Models\Order;
 use App\Modules\Orders\Support\AdminOrderQuery;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Http\Request;
 
 /** GET /admin/orders · GET/PATCH /admin/orders/{id} */
 final class OrderController

@@ -12,6 +12,7 @@ use App\Modules\Customers\Notifications\CustomerResetPasswordNotification;
 use App\Shared\Audit\AuditEntry;
 use App\Shared\Audit\AuditLogger;
 use App\Shared\Domain\ActorRef;
+use Illuminate\Auth\Passwords\PasswordBroker;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
@@ -80,7 +81,7 @@ final class AdminCustomerActions
 
     public function sendPasswordReset(ActorRef $actor, Customer $customer): void
     {
-        /** @var \Illuminate\Auth\Passwords\PasswordBroker $broker */
+        /** @var PasswordBroker $broker */
         $broker = Password::broker('customers');
         $customer->notify(new CustomerResetPasswordNotification($broker->getRepository()->create($customer)));
         $this->audit->record(new AuditEntry($actor, 'customer.password_reset_sent', 'customer', $customer->id));

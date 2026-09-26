@@ -9,6 +9,7 @@ use App\Modules\Catalog\DTOs\VariantData;
 use App\Modules\Catalog\Models\ProductVariant;
 use App\Modules\Catalog\Support\CategoryTree;
 use App\Modules\Catalog\Support\ImageUrls;
+use App\Modules\Inventory\Contracts\InventoryRecords;
 use App\Modules\Pricing\DTOs\PricingSubject;
 use App\Shared\Domain\Money;
 use App\Shared\Domain\PackageDimensions;
@@ -62,6 +63,8 @@ final class EloquentCatalogQuery implements CatalogQuery
             }
         }
 
+        $inventory = DB::table('inventory')->whereIn('variant_id', $ids)->pluck('low_stock_threshold', 'variant_id')->all();
+        $defaultThreshold = app(InventoryRecords::class)->defaultLowStockThreshold();
         $tree = app(CategoryTree::class);
         $out = [];
         foreach ($rows as $r) {
@@ -69,9 +72,11 @@ final class EloquentCatalogQuery implements CatalogQuery
             $categoryIds = $categories[$productId] ?? [];
             $categoryIds[] = (int) $r->primary_category_id;
             $image = $images['v'.$r->id] ?? $images[$productId] ?? null;
-            $package = ($r->package_length_cm !== null && $r->package_width_cm !== null && $r->package_height_cm !== null)
-                ? PackageDimensions::fromCentimeters((string) $r->package_length_cm, (string) $r->package_width_cm, (string) $r->package_height_cm)
-                : null;
+            $saleUnit = SaleUnit::from($r->sale_unit);
+            $fixedWidth = $r->fixed_width_mm !== null ? (int) $r->fixed_width_mm : ($r->p_fixed_width_mm !== null ? (int) $r->p_fixed_width_mm : null);
+            $package = self::package($r, $saleUnit, $fixedWidth);
+            $threshold = isset($inventory[(int) $r->id]) && $inventory[(int) $r->id] !== null
+                ? Quantity::fromString((string) $inventory[(int) $r->id]) : $defaultThreshold;
 
             $out[(int) $r->id] = new VariantData(
                 id: (int) $r->id,
@@ -80,7 +85,7 @@ final class EloquentCatalogQuery implements CatalogQuery
                 productName: $r->p_name,
                 sku: $r->sku,
                 name: $r->name,
-                saleUnit: SaleUnit::from($r->sale_unit),
+                saleUnit: $saleUnit,
                 isActive: (bool) $r->is_active,
                 productIsActive: (bool) $r->p_active && $r->p_deleted === null,
                 pickupOnly: (bool) $r->pickup_only,
@@ -90,7 +95,7 @@ final class EloquentCatalogQuery implements CatalogQuery
                 minQuantity: Quantity::fromString((string) $r->min_quantity),
                 maxQuantity: $r->max_quantity !== null ? Quantity::fromString((string) $r->max_quantity) : null,
                 quantityStep: Quantity::fromString((string) $r->quantity_step),
-                fixedWidthMm: $r->fixed_width_mm !== null ? (int) $r->fixed_width_mm : ($r->p_fixed_width_mm !== null ? (int) $r->p_fixed_width_mm : null),
+                fixedWidthMm: $fixedWidth,
                 minWidthMm: $r->min_width_mm !== null ? (int) $r->min_width_mm : null,
                 maxWidthMm: $r->max_width_mm !== null ? (int) $r->max_width_mm : null,
                 minHeightMm: $r->min_height_mm !== null ? (int) $r->min_height_mm : null,
@@ -103,10 +108,45 @@ final class EloquentCatalogQuery implements CatalogQuery
                 rollLengthM: $r->roll_length_m !== null ? (string) $r->roll_length_m : null,
                 imageUrl: $image !== null ? (ImageUrls::for($image->disk, $image->path, $image->width_px)['w300'] ?? null) : null,
                 primaryCategorySlug: (string) ($r->c_slug ?? ''),
+                attributes: array_map('strval', (array) (json_decode((string) $r->attributes, true) ?: [])),
+                image: $image !== null ? [
+                    'id' => (int) $image->id,
+                    'urls' => ImageUrls::for($image->disk, $image->path, $image->width_px !== null ? (int) $image->width_px : null),
+                    'alt' => $image->alt !== null && $image->alt !== '' ? $image->alt : $r->p_name,
+                    'width' => $image->width_px !== null ? (int) $image->width_px : null,
+                    'height' => $image->height_px !== null ? (int) $image->height_px : null,
+                    'position' => (int) $image->position,
+                    'variant_id' => $image->variant_id !== null ? (int) $image->variant_id : null,
+                ] : null,
+                lowStockThreshold: $threshold,
             );
         }
 
         return $out;
+    }
+
+    /**
+     * Logistic package (SHIPPING.md §2.2/§2.3). Rolled goods (LINEAR_METER/SQUARE_METER)
+     * only register the roll diameter (package_width/height_cm); the length is the
+     * material width (fixed width, else package_length_cm, else the diameter).
+     */
+    private static function package(object $r, SaleUnit $unit, ?int $fixedWidthMm): ?PackageDimensions
+    {
+        $rolled = in_array($unit, [SaleUnit::LinearMeter, SaleUnit::SquareMeter], true);
+        if (! $rolled) {
+            return ($r->package_length_cm !== null && $r->package_width_cm !== null && $r->package_height_cm !== null)
+                ? PackageDimensions::fromCentimeters((string) $r->package_length_cm, (string) $r->package_width_cm, (string) $r->package_height_cm)
+                : null;
+        }
+        if ($r->package_width_cm === null && $r->package_height_cm === null) {
+            return null;
+        }
+        $w = PackageDimensions::fromCentimeters('1', (string) ($r->package_width_cm ?? $r->package_height_cm), (string) ($r->package_height_cm ?? $r->package_width_cm));
+        $diameter = max($w->widthMm, $w->heightMm);
+        $length = $fixedWidthMm
+            ?? ($r->package_length_cm !== null ? PackageDimensions::fromCentimeters((string) $r->package_length_cm, '1', '1')->lengthMm : $diameter);
+
+        return new PackageDimensions($length, $diameter, $diameter);
     }
 
     public function variantBySlug(string $productSlug, int $variantId): ?VariantData

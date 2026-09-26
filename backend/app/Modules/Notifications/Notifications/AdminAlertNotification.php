@@ -6,6 +6,7 @@ namespace App\Modules\Notifications\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -33,7 +34,7 @@ final class AdminAlertNotification extends Notification implements ShouldQueue
     /** @return list<string> */
     public function via(object $notifiable): array
     {
-        return $notifiable instanceof \Illuminate\Notifications\AnonymousNotifiable ? ['mail'] : ['mail', 'database'];
+        return $notifiable instanceof AnonymousNotifiable ? ['mail'] : ['mail', 'database'];
     }
 
     public function toMail(object $notifiable): MailMessage

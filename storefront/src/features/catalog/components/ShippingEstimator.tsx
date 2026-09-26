@@ -6,7 +6,7 @@ import Skeleton from '@mui/material/Skeleton';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { toApiError } from '@/shared/api/errors';
 import { formatCEP, isValidCEP, onlyDigits } from '@/shared/formatters/postalCode';
 import { formatWeight } from '@/shared/formatters/quantity';
@@ -23,10 +23,6 @@ export function ShippingEstimator({ variantId, line, configurationLabel }: { var
   const [requested, setRequested] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const debouncedLine = useDebounce(line, 600);
-
-  useEffect(() => {
-    if (preferred && !input) setInput(formatCEP(preferred));
-  }, [preferred, input]);
 
   const items = debouncedLine ? [{ variant_id: variantId, ...debouncedLine }] : null;
   const q = useQuery({

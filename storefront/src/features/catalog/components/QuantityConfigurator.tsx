@@ -137,7 +137,7 @@ export function QuantityConfigurator({ productSlug, productName, variant, initia
     suggestions && suggestions.length ? (
       <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
         {suggestions.map((s) => {
-          const text = formatMilli(toMilli(s), field === 'quantity' && !isIntegerUnit(unit) ? Math.max(0, Math.min(2, stepDecimals(stepMilli))) : 0).replace(/\./g, '');
+          const text = formatMilli(toMilli(s), field === 'quantity' && !isIntegerUnit(unit) ? Math.max(2, stepDecimals(stepMilli)) : 0).replace(/\./g, '');
           return (
             <Button key={s} size="small" variant="outlined" onClick={() => set(field)(text)} aria-label={`Usar ${text}`}>
               Usar {text}

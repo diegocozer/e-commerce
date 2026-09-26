@@ -6,6 +6,7 @@ namespace Tests\Feature\Notifications;
 
 use App\Modules\Customers\Models\Customer;
 use App\Modules\Identity\Enums\AdminRole;
+use App\Modules\Identity\Models\AdminUser;
 use App\Modules\Notifications\Channels\WhatsAppChannel;
 use App\Modules\Notifications\Contracts\WhatsAppClient;
 use App\Modules\Notifications\Notifications\AdminAlertNotification;
@@ -19,6 +20,7 @@ use App\Modules\Notifications\Notifications\PaymentFailedNotification;
 use App\Modules\Notifications\Notifications\RefundProcessedNotification;
 use App\Modules\Notifications\Services\NullWhatsAppClient;
 use App\Modules\Orders\Actions\ChangeOrderStatus;
+use App\Modules\Orders\Enums\OrderStatus;
 use App\Modules\Payments\Enums\PaymentRefundStatus;
 use App\Modules\Payments\Enums\PaymentStatus;
 use App\Modules\Settings\Contracts\SettingsRepository;
@@ -67,18 +69,18 @@ final class OrderNotificationsTest extends OrdersTestCase
         Notification::assertSentTo($admin, AdminAlertNotification::class, static fn (AdminAlertNotification $n): bool => $n->type === 'order_paid');
 
         $change = app(ChangeOrderStatus::class);
-        $change->execute($retry->refresh(), \App\Modules\Orders\Enums\OrderStatus::Processing, ActorRef::admin($admin->id));
-        $change->execute($retry->refresh(), \App\Modules\Orders\Enums\OrderStatus::Shipped, ActorRef::admin($admin->id));
+        $change->execute($retry->refresh(), OrderStatus::Processing, ActorRef::admin($admin->id));
+        $change->execute($retry->refresh(), OrderStatus::Shipped, ActorRef::admin($admin->id));
         Notification::assertSentTo($customer, OrderShippedNotification::class);
-        $change->execute($retry->refresh(), \App\Modules\Orders\Enums\OrderStatus::Delivered, ActorRef::admin($admin->id));
+        $change->execute($retry->refresh(), OrderStatus::Delivered, ActorRef::admin($admin->id));
         Notification::assertSentTo($customer, OrderDeliveredNotification::class);
 
         $pickup = $this->placeOrder($customer, methodType: 'pickup');
         $p3 = $this->payment($pickup);
         $this->gateway->set((string) $p3->external_id, PaymentStatus::Approved);
         $this->sendWebhook((string) $p3->external_id, 'evt_p3')->assertOk();
-        $change->execute($pickup->refresh(), \App\Modules\Orders\Enums\OrderStatus::Processing, ActorRef::admin($admin->id));
-        $change->execute($pickup->refresh(), \App\Modules\Orders\Enums\OrderStatus::ReadyForPickup, ActorRef::admin($admin->id));
+        $change->execute($pickup->refresh(), OrderStatus::Processing, ActorRef::admin($admin->id));
+        $change->execute($pickup->refresh(), OrderStatus::ReadyForPickup, ActorRef::admin($admin->id));
         Notification::assertSentTo($customer, OrderReadyForPickupNotification::class);
 
         $paid = $this->placeOrder($customer);
@@ -93,7 +95,7 @@ final class OrderNotificationsTest extends OrdersTestCase
     public function test_refund_failure_alerts_finance(): void
     {
         $this->actingAsAdmin([], AdminRole::Finance);
-        $finance = \App\Modules\Identity\Models\AdminUser::query()->latest('id')->firstOrFail();
+        $finance = AdminUser::query()->latest('id')->firstOrFail();
         Notification::fake();
         $order = $this->placeOrder();
         $payment = $this->payment($order);
@@ -132,10 +134,9 @@ final class OrderNotificationsTest extends OrdersTestCase
         self::assertNotEmpty($client->sent);
 
         $this->actingAs($customer, 'customer');
-        $this->getJson('/api/v1/me/notifications')->assertOk()
-            ->assertJsonPath('data.0.type', 'order_paid')
-            ->assertJsonPath('data.1.type', 'order_created')
-            ->assertJsonPath('data.0.read_at', null);
+        $types = $this->getJson('/api/v1/me/notifications')->assertOk()
+            ->assertJsonPath('data.0.read_at', null)->json('data.*.type');
+        self::assertEqualsCanonicalizing(['order_created', 'order_paid'], $types);
         $this->postJson('/api/v1/me/notifications/read')->assertNoContent();
         $this->getJson('/api/v1/me/notifications?unread=1')->assertOk()->assertJsonCount(0, 'data');
     }

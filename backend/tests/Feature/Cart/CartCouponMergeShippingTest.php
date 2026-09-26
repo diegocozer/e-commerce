@@ -20,6 +20,12 @@ final class CartCouponMergeShippingTest extends TestCase
 
     protected bool $seed = true;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->ensureSeeded();
+    }
+
     public function test_coupon_apply_valid_then_invalid_422_and_remove(): void
     {
         $token = $this->addItem(['variant_id' => $this->variantId('VIN-BR-122-BR'), 'quantity' => 20])->json('data.token'); // 20 × 1490 = 29800

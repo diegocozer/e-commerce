@@ -34,6 +34,7 @@ use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -173,7 +174,7 @@ abstract class OrdersTestCase extends TestCase
         return ['x-signature' => "ts={$ts},v1=".hash_hmac('sha256', $manifest, $secret), 'x-request-id' => $requestId];
     }
 
-    protected function sendWebhook(string $dataId, string $eventId = 'evt_1', ?array $headers = null): \Illuminate\Testing\TestResponse
+    protected function sendWebhook(string $dataId, string $eventId = 'evt_1', ?array $headers = null): TestResponse
     {
         return $this->withHeaders($headers ?? $this->signedHeaders(strtolower($dataId)))
             ->postJson('/api/v1/webhooks/sandbox', ['id' => $eventId, 'type' => 'payment', 'action' => 'payment.updated', 'data' => ['id' => $dataId]]);

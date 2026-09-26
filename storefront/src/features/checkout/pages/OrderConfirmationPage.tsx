@@ -71,7 +71,7 @@ function PixView({ order }: { order: OrderDetail }) {
   const notify = useSnackbar();
   const settings = useSettings();
   const reorder = useReorder();
-  const mountedAt = useRef(Date.now());
+  const [mountedAt] = useState(() => Date.now());
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -84,7 +84,7 @@ function PixView({ order }: { order: OrderDetail }) {
     refetchInterval: (q) => {
       const d = q.state.data;
       if (d && (d.status !== 'pending_payment' || d.payment_status !== 'pending')) return false;
-      if (Date.now() - mountedAt.current > POLL_MAX_MS) return false;
+      if (Date.now() - mountedAt > POLL_MAX_MS) return false;
       return POLL_MS;
     },
     refetchIntervalInBackground: false,

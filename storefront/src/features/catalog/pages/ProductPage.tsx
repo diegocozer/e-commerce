@@ -121,12 +121,11 @@ function ProductSkeleton() {
 function ProductView({ product }: { product: ProductDetail }) {
   const [params, setParams] = useSearchParams();
   const skuParam = params.get('sku');
-  const initial = useMemo(
+  // Variante selecionada vive na URL (?sku=), sem novo histórico (UX §4.4.3).
+  const variant = useMemo(
     () => product.variants.find((v) => v.sku === skuParam) ?? product.variants.find((v) => v.id === product.default_variant_id) ?? product.variants[0],
     [product, skuParam],
   );
-  const [variant, setVariant] = useState<ProductVariant>(initial);
-  useEffect(() => setVariant(initial), [initial]);
 
   const [cfg, setCfg] = useState<ConfiguratorState | null>(null);
   const [externalErrors, setExternalErrors] = useState<Partial<Record<ConfigField, string>>>({});
@@ -138,7 +137,6 @@ function ProductView({ product }: { product: ProductDetail }) {
   const related = useRelated(product.slug);
 
   const selectVariant = (v: ProductVariant) => {
-    setVariant(v);
     setExternalErrors({});
     setMaxAvailable(null);
     const next = new URLSearchParams(params);

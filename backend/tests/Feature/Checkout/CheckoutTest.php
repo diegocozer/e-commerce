@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Checkout;
 
+use App\Modules\Cart\Contracts\OrderShippingRequestSource;
 use App\Modules\Cart\Models\Cart;
 use App\Modules\Catalog\Models\ProductVariant;
 use App\Modules\Customers\Models\Customer;
@@ -18,6 +19,8 @@ use App\Modules\Payments\Gateways\SandboxGateway;
 use App\Modules\Payments\Models\Payment;
 use App\Modules\Payments\Services\PaymentGatewayManager;
 use App\Shared\Domain\Money;
+use App\Shared\PostalCode\PostalCodeInfo;
+use App\Shared\PostalCode\PostalCodeLookup;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
@@ -49,12 +52,9 @@ final class CheckoutTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->ensureSeeded();
         $this->customer = $this->maria();
-        $address = $this->addressOf($this->customer);
-        // The fake postal-code lookup of the test env resolves 89010000 (Blumenau) but not the
-        // seeded 89012000 (city unknown → no own-delivery zone match). Use a resolvable CEP.
-        DB::table('customer_addresses')->where('id', $address->id)->update(['postal_code' => '89010000']);
-        $this->addressUuid = $address->uuid;
+        $this->addressUuid = $this->addressOf($this->customer)->uuid; // seeded "Casa", CEP 89012-000
         $this->actingAs($this->customer, 'customer');
     }
 
@@ -92,6 +92,17 @@ final class CheckoutTest extends TestCase
     private function checkout(array $body, ?string $key = null): TestResponse
     {
         return $this->postJson('/api/v1/checkout', $body, ['Idempotency-Key' => $key ?? (string) Str::uuid()]);
+    }
+
+    /** Services holding the lookup were resolved during setUp/prepareCart: rebuild them. */
+    private function forgetShippingSingletons(): void
+    {
+        foreach (array_keys($this->app->getBindings()) as $abstract) {
+            if (str_starts_with($abstract, 'App\\Modules\\Shipping\\') || str_starts_with($abstract, 'App\\Modules\\Checkout\\')
+                || str_starts_with($abstract, 'App\\Modules\\Cart\\')) {
+                $this->app->forgetInstance($abstract);
+            }
+        }
     }
 
     private function failGateway(bool $fail): void
@@ -164,7 +175,7 @@ final class CheckoutTest extends TestCase
             ->assertJsonPath('data.order.items.0.unit_price_cents', 1590)
             ->assertJsonPath('data.order.items.0.subtotal_cents', 7950)
             ->assertJsonPath('data.order.shipping.method_type', 'own_delivery')
-            ->assertJsonPath('data.order.shipping.address.postal_code', '89010000')
+            ->assertJsonPath('data.order.shipping.address.postal_code', '89012000')
             ->assertJsonPath('data.order.notes', 'Entregar após 14h')
             ->assertJsonPath('data.payment.status', 'pending')
             ->assertJsonPath('data.payment.amount_cents', 9950);
@@ -350,6 +361,47 @@ final class CheckoutTest extends TestCase
         self::assertSame($order->uuid, $retry->json('data.order.uuid'));
         self::assertNotEmpty($retry->json('data.payment.pix.copy_paste'));
         self::assertSame(1, Order::query()->count());
+    }
+
+    public function test_no_postal_code_lookup_happens_inside_the_checkout_transaction(): void
+    {
+        $this->prepareCart();
+        $real = $this->app->make(PostalCodeLookup::class);
+        $levels = new \ArrayObject;
+        $this->app->instance(PostalCodeLookup::class, new class($real, $levels) implements PostalCodeLookup
+        {
+            public function __construct(private readonly PostalCodeLookup $real, private readonly \ArrayObject $levels) {}
+
+            public function lookup(string $postalCode): PostalCodeInfo
+            {
+                $this->levels->append(DB::transactionLevel());
+
+                return $this->real->lookup($postalCode);
+            }
+        });
+        $this->forgetShippingSingletons();
+        $baseline = DB::transactionLevel(); // RefreshDatabase wraps the test in a transaction
+
+        $this->checkout($this->body())->assertCreated();
+
+        self::assertNotEmpty($levels->getArrayCopy(), 'the checkout must resolve the destination (pre-check)');
+        self::assertSame([$baseline], array_values(array_unique($levels->getArrayCopy())));
+    }
+
+    public function test_order_shipping_request_source_for_the_admin_simulator(): void
+    {
+        $this->prepareCart();
+        $order = $this->checkout($this->body())->assertCreated()->json('data.order');
+        $id = (int) Order::query()->where('uuid', $order['uuid'])->value('id');
+
+        $source = $this->app->make(OrderShippingRequestSource::class);
+        $result = $source->forOrder($id);
+
+        self::assertSame('89012000', $result['postal_code']);
+        self::assertSame(7950, $result['subtotal_cents']);
+        self::assertCount(1, $result['lines']);
+        self::assertSame(5000, $result['lines'][0]->billable->milli());
+        self::assertNull($source->forOrder(999999));
     }
 
     public function test_checkout_rate_limit(): void

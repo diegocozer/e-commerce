@@ -219,7 +219,7 @@ final class ShippingAdminTest extends TestCase
     {
         $this->shippingAdmin();
         $this->postJson(self::API.'/simulate', ['postal_code' => '89010100'])->assertStatus(422)->assertJsonValidationErrors('items');
-        $this->postJson(self::API.'/simulate', ['postal_code' => '89010100', 'order_id' => 1])->assertStatus(422)->assertJsonPath('errors.order_id.0', 'Indisponível.');
+        $this->postJson(self::API.'/simulate', ['postal_code' => '89010100', 'order_id' => 1])->assertStatus(422)->assertJsonPath('errors.order_id.0', 'Pedido não encontrado.');
         $this->postJson(self::API.'/simulate', ['postal_code' => '123', 'logistics_override' => ['total_weight_grams' => 1, 'total_volume_cm3' => 1, 'largest_dimension_cm' => 1]])
             ->assertStatus(422)->assertJsonValidationErrors('postal_code');
 

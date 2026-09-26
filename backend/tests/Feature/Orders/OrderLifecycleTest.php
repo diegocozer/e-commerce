@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Orders;
 
+use App\Modules\Customers\Models\Customer;
 use App\Modules\Inventory\Exceptions\InsufficientStock;
 use App\Modules\Orders\Actions\ExpirePendingOrders;
 use App\Modules\Orders\Enums\CancelReasonCode;
 use App\Modules\Orders\Enums\OrderPaymentStatus;
 use App\Modules\Orders\Enums\OrderStatus;
 use App\Modules\Orders\Exceptions\TooManyPendingOrders;
+use App\Modules\Orders\Models\Order;
 use App\Modules\Orders\Models\OrderStatusHistory;
 use App\Modules\Payments\Contracts\PaymentService;
 use App\Modules\Payments\Enums\PaymentStatus;
-use App\Modules\Customers\Models\Customer;
+use App\Modules\Payments\Exceptions\PaymentGatewayUnavailable;
+use App\Modules\Payments\Models\Payment;
+use App\Modules\Payments\Models\WebhookEvent;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
 use Tests\Feature\Orders\Support\OrdersTestCase;
@@ -47,7 +51,7 @@ final class OrderLifecycleTest extends OrdersTestCase
             $this->placeOrder($customer, [[$variant, '2']]);
             self::fail('expected InsufficientStock');
         } catch (InsufficientStock) {
-            self::assertSame(0, \App\Modules\Orders\Models\Order::query()->count());
+            self::assertSame(0, Order::query()->count());
         }
 
         for ($i = 0; $i < 3; $i++) {
@@ -76,7 +80,7 @@ final class OrderLifecycleTest extends OrdersTestCase
         self::assertNull($order->expires_at);
         self::assertSame(['on_hand' => '8.000', 'reserved' => '0.000'], $this->stock($variant));
         self::assertSame(1, $payment->transactions()->where('type', 'approve')->count());
-        self::assertSame(2, \App\Modules\Payments\Models\WebhookEvent::query()->count());
+        self::assertSame(2, WebhookEvent::query()->count());
     }
 
     public function test_customer_cancel_releases_stock_and_payment(): void
@@ -225,7 +229,7 @@ final class OrderLifecycleTest extends OrdersTestCase
         $this->postJson("/api/v1/me/orders/{$order->uuid}/payment", ['payment_method' => 'pix'])
             ->assertCreated()->assertJsonPath('data.status', 'pending')->assertJsonStructure(['data' => ['pix' => ['copy_paste', 'qr_code_base64', 'expires_at']]]);
         $this->postJson("/api/v1/me/orders/{$order->uuid}/payment", ['payment_method' => 'pix'])->assertOk();
-        self::assertSame(1, \App\Modules\Payments\Models\Payment::query()->where('order_id', $order->id)->where('status', 'pending')->count());
+        self::assertSame(1, Payment::query()->where('order_id', $order->id)->where('status', 'pending')->count());
     }
 
     public function test_retry_payment_after_gateway_failure_and_503(): void
@@ -233,8 +237,8 @@ final class OrderLifecycleTest extends OrdersTestCase
         $this->gateway->down = true;
         try {
             $order = $this->placeOrder();
-        } catch (\App\Modules\Payments\Exceptions\PaymentGatewayUnavailable) {
-            $order = \App\Modules\Orders\Models\Order::query()->latest('id')->firstOrFail();
+        } catch (PaymentGatewayUnavailable) {
+            $order = Order::query()->latest('id')->firstOrFail();
         }
         self::assertNull($this->payment($order)->external_id);
         $this->actingAs(Customer::query()->findOrFail($order->customer_id), 'customer');

@@ -419,3 +419,15 @@ pedido não cancelado; receita em visão de caixa (estornos por `refunded_at`);
 margem e valor de estoque usam `cost_cents` **atual** da variante (evolução:
 snapshot de custo em `order_items`); tempo de atendimento em horas corridas no
 MVP. `Settings` é módulo-base e pode ser consumido por `Cart`.
+
+## ADR-033 — Integração B-A (contas)
+
+- `Settings` é módulo-base: `Customers` pode depender dele (substituir as leituras
+  diretas de `settings` via `DB::table` por `SettingsRepository` na revisão de código).
+- Contas bloqueadas/desativadas/anonimizadas perdem a sessão na próxima requisição
+  (providers de auth filtram `is_active`/`anonymized_at`).
+- Merge de carrinho no login ocorre **somente** via `GuestCartMerger` (Cart); o
+  evento `CustomerAuthenticated` não deve disparar novo merge.
+- Pendências para a revisão: Shipping deve fazer o binding de
+  `Settings\Contracts\PickupPointProvider`; anonimização deve limpar carrinhos
+  (Cart); alerta de ≥10 logins admin falhos (hoje só log + auditoria).

@@ -17,6 +17,7 @@ use App\Modules\Orders\Models\Order;
 use App\Modules\Orders\Models\OrderItem;
 use App\Modules\Orders\Models\OrderStatusHistory;
 use App\Modules\Pricing\Contracts\CouponService;
+use App\Modules\Pricing\DTOs\CouponEvaluation;
 use App\Modules\Pricing\Exceptions\CouponInvalid;
 use App\Shared\Domain\ActorType;
 use App\Shared\Domain\Money;
@@ -239,7 +240,7 @@ final class OrderPlacementService implements OrderPlacement
 
     private function redeemCoupon(PlaceOrderData $data, Order $order): void
     {
-        /** @var \App\Modules\Pricing\DTOs\CouponEvaluation $expected */
+        /** @var CouponEvaluation $expected */
         $expected = $data->coupon;
         $redeemed = $this->coupons->redeem((string) $expected->code, $data->couponContext, $order->id);
 
@@ -248,6 +249,11 @@ final class OrderPlacementService implements OrderPlacement
         }
         if (! $redeemed->discount->equals($expected->discount) || $redeemed->freeShipping !== $expected->freeShipping) {
             throw CouponInvalid::from($redeemed, (string) $expected->code);
+        }
+
+        // The redemption (under the coupon lock) is authoritative for the snapshot.
+        if ($redeemed->couponId !== null) {
+            $order->forceFill(['coupon_id' => $redeemed->couponId, 'coupon_code' => $redeemed->code ?? $expected->code])->save();
         }
     }
 }
