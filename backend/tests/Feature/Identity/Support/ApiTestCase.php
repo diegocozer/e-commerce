@@ -112,6 +112,23 @@ abstract class ApiTestCase extends TestCase
         $this->app['auth']->forgetGuards();
     }
 
+    /** Current session id of the (array) session store. */
+    protected function sessionId(): string
+    {
+        return $this->app['session.store']->getId();
+    }
+
+    /** Sends the session cookie of a given session id on the next requests (a "browser"). */
+    protected function useSession(string $id): static
+    {
+        // A new PHP process: no cached guard user, no in-memory session attributes
+        // (the array handler keeps the stored sessions).
+        $this->app['auth']->forgetGuards();
+        $this->app['session.store']->flush();
+
+        return $this->withCredentials()->withCookie((string) config('session.cookie'), $id);
+    }
+
     protected function assertApiError(TestResponse $response, int $status, string $code): TestResponse
     {
         return $response->assertStatus($status)->assertJson(['code' => $code]);

@@ -33,10 +33,10 @@ final class ChangeOrderStatus
             $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
             $from = $locked->status;
 
-            if (! in_array($to, OrderStateMachine::OPERATIONAL, true)) {
+            if (! in_array($to, OrderStateMachine::OPERATIONAL, true)
+                || ! $this->machine->canTransition($from, $to, $actor, $locked->shipping_method_type)) {
                 throw InvalidOrderTransition::between($from, $to, $this->machine->operationalTransitions($from, $locked->shipping_method_type));
             }
-            $this->machine->assertTransition($from, $to, $actor, $locked->shipping_method_type);
 
             $now = CarbonImmutable::now();
             $changes = match ($to) {

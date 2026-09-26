@@ -84,7 +84,7 @@ final class CartItemsTest extends TestCase
 
     public function test_client_prices_are_prohibited_and_nothing_is_saved(): void
     {
-        foreach (['unit_price_cents' => 1, 'price' => 1, 'line_total_cents' => 1, 'customer_id' => 1, 'discount_cents' => 0, 'status' => 'ok'] as $field => $value) {
+        foreach (['unit_price_cents' => 1, 'price' => 1, 'line_total_cents' => 1, 'customer_id' => 1, 'discount_cents' => 0, 'status' => 'ok', 'price_cents' => null] as $field => $value) {
             $this->addItem(['variant_id' => $this->variantId('VIN-BR-122-BR'), 'quantity' => 5, $field => $value])
                 ->assertUnprocessable()->assertJsonValidationErrors($field);
         }

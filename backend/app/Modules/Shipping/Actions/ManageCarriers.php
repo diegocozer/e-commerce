@@ -18,7 +18,7 @@ final class ManageCarriers
     public function create(array $data, ActorRef $actor): ShippingCarrier
     {
         return DB::transaction(function () use ($data, $actor): ShippingCarrier {
-            $carrier = ShippingCarrier::query()->create(self::attributes($data) + ['settings' => [], 'is_active' => false]);
+            $carrier = ShippingCarrier::query()->create(self::attributes($data) + ['settings' => [], 'is_active' => false])->refresh();
             $this->support->record($actor, 'shipping_carrier', 'created', $carrier->id, [], ShippingAdminSupport::snapshot($carrier) + ['has_credentials' => $carrier->credentials !== null]);
 
             return $carrier;

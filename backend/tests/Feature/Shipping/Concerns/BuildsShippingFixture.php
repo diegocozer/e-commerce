@@ -22,6 +22,8 @@ use App\Shared\Domain\Money;
 use App\Shared\Domain\PackageDimensions;
 use App\Shared\Domain\Quantity;
 use App\Shared\Domain\SaleUnit;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Event;
 
 /**
  * SHIPPING.md §5.3 configuration: methods pickup/own-delivery/table-regional/table-cep,
@@ -162,7 +164,7 @@ trait BuildsShippingFixture
     protected function captureLogs(): \ArrayObject
     {
         $logs = new \ArrayObject;
-        \Illuminate\Support\Facades\Event::listen(\Illuminate\Log\Events\MessageLogged::class, static function ($e) use ($logs): void {
+        Event::listen(MessageLogged::class, static function ($e) use ($logs): void {
             $logs[] = ['level' => $e->level, 'message' => $e->message, 'context' => $e->context];
         });
 

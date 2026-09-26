@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { Alert, Checkbox, FormControlLabel, Typography } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -45,22 +46,31 @@ export function AdjustDialog({ item, onClose }: { item: InventoryItem; onClose: 
   const [newVal, code] = useWatch({ control, name: ['new_on_hand', 'reason_code'] });
   const [ack, setAck] = useState(false);
   const [ackError, setAckError] = useState(false);
-  const { error, setError: setTop, run } = useFormSubmit(setError, { reason: 'note' });
+  const { error, run } = useFormSubmit(setError, { reason: 'note' });
+  const qc = useQueryClient();
   const milli = newVal ? toMilli(newVal) : null;
   const diff = milli === null ? null : (milli - Math.round(item.on_hand * 1000)) / 1000;
   const big = diff !== null && item.on_hand > 0 && Math.abs(diff) / item.on_hand > 0.1;
 
   const onSubmit = handleSubmit(async (v) => {
     if (big && !ack) return setAckError(true);
-    const ok = await run(() => m.mutateAsync({ new_on_hand: Number(v.new_on_hand), reason: composeReason(v.reason_code, v.note), expected_on_hand: item.on_hand }));
-    if (ok) {
+    const ok = await run(async () => {
+      try {
+        await m.mutateAsync({ new_on_hand: Number(v.new_on_hand), reason: composeReason(v.reason_code, v.note), expected_on_hand: item.on_hand });
+      } catch (e) {
+        if (isApiError(e) && e.code === 'stale_resource') {
+          // 409: estoque mudou — recarrega a lista e fecha para reabrir com valores novos (UX §5.7).
+          void qc.invalidateQueries({ queryKey: ['admin', 'inventory'] });
+          notify.warning('O estoque mudou enquanto você editava. Valores atualizados.');
+          onClose();
+          return;
+        }
+        throw e;
+      }
       notify.success('Ajuste registrado');
       onClose();
-    } else if (isApiError(m.error) && m.error.code === 'stale_resource') {
-      setTop('O estoque mudou enquanto você editava. Valores atualizados — revise e confirme novamente.');
-      onClose();
-      notify.warning('O estoque mudou enquanto você editava. Valores atualizados.');
-    }
+    });
+    void ok;
   });
 
   return (

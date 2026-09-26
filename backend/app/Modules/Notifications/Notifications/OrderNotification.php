@@ -7,7 +7,9 @@ namespace App\Modules\Notifications\Notifications;
 use App\Modules\Notifications\Channels\WhatsAppChannel;
 use App\Modules\Notifications\DTOs\WhatsAppMessage;
 use App\Modules\Orders\Models\Order;
-use App\Modules\Orders\Support\OrderPresenter;
+use App\Modules\Orders\Models\OrderItem;
+use App\Shared\Domain\Quantity;
+use App\Shared\Domain\SaleUnit;
 use App\Modules\Settings\Contracts\SettingsRepository;
 use App\Modules\Settings\Enums\SettingKey;
 use Illuminate\Bus\Queueable;
@@ -77,7 +79,7 @@ abstract class OrderNotification extends Notification implements ShouldQueue
                 'order' => $order,
                 'items' => $order->items->map(static fn ($i): array => [
                     'name' => $i->product_name.($i->variant_name !== '' ? ' — '.$i->variant_name : ''),
-                    'configuration' => OrderPresenter::configurationLabel($i),
+                    'configuration' => self::configuration($i),
                     'total' => self::money($i->total_cents),
                 ])->all(),
                 'totals' => [
@@ -138,6 +140,17 @@ abstract class OrderNotification extends Notification implements ShouldQueue
     protected function orderUrl(Order $order): string
     {
         return rtrim((string) config('app.frontend_url', config('app.url')), '/').'/minha-conta/pedidos/'.$order->uuid;
+    }
+
+    /** "5 m" | "1,20 × 2,50 m × 2 peças" */
+    protected static function configuration(OrderItem $item): string
+    {
+        if ($item->sale_unit === SaleUnit::SquareMeter) {
+            return sprintf('%s × %s m × %d %s', Quantity::fromMilli((int) $item->width_mm)->format(2),
+                Quantity::fromMilli((int) $item->height_mm)->format(2), (int) $item->pieces, (int) $item->pieces === 1 ? 'peça' : 'peças');
+        }
+
+        return str_replace('.', ',', ($item->quantity ?? $item->billable_quantity)->toTrimmedString()).' '.$item->sale_unit->abbreviation();
     }
 
     protected static function money(int $cents): string

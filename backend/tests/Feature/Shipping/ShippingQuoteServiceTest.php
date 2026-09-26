@@ -188,7 +188,7 @@ final class ShippingQuoteServiceTest extends TestCase
 
         $e = $this->expectConflict('shipping_price_changed', fn () => $this->validate((string) $quote->quoteId, $this->ownOptionId()));
         self::assertSame(2200, $e->newQuote->option($this->ownOptionId())?->priceCents);
-        self::assertSame(ShippingConflictMessage::PRICE_CHANGED, $e->getMessage());
+        self::assertSame('O valor do frete foi atualizado. Escolha novamente a forma de entrega.', $e->getMessage());
     }
 
     public function test_option_disappeared_is_unavailable(): void
@@ -262,10 +262,4 @@ final class ShippingQuoteServiceTest extends TestCase
         self::assertNull(ShippingQuote::query()->where('uuid', $old->quoteId)->first());
         self::assertNotNull(ShippingQuote::query()->where('uuid', $recent->quoteId)->first());
     }
-}
-
-/** @internal */
-final class ShippingConflictMessage
-{
-    public const string PRICE_CHANGED = 'O valor do frete foi atualizado. Escolha novamente a forma de entrega.';
 }

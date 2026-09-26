@@ -12,6 +12,7 @@ use App\Modules\Shipping\DTOs\ShippingRequest;
 use App\Modules\Shipping\Engine\DeliveryLabelFormatter;
 use App\Modules\Shipping\Engine\EvaluationContext;
 use App\Modules\Shipping\Engine\MethodResult;
+use App\Modules\Shipping\Engine\RuleEvaluation;
 use App\Modules\Shipping\Engine\RuleEvaluator;
 use App\Modules\Shipping\Engine\RulePriceCalculator;
 use App\Modules\Shipping\Engine\ZoneMatchSet;
@@ -174,7 +175,7 @@ abstract class AbstractRuleBasedHandler implements ShippingMethodHandlerInterfac
         ));
     }
 
-    /** @param  list<\App\Modules\Shipping\Engine\RuleEvaluation>  $rejections */
+    /** @param  list<RuleEvaluation>  $rejections */
     private function unmatchedReason(array $rejections): UnavailableReason
     {
         $relevant = array_values(array_filter($rejections, static fn ($e): bool => ! $e->isTemporal()));

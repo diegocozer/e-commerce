@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Shipping\Http\Controllers\Admin;
 
 use App\Modules\Shipping\Actions\ManageZones;
-use App\Modules\Shipping\Domain\Config\ShippingConfigRepository;
+use App\Modules\Shipping\Domain\Config\ZoneConfig;
 use App\Modules\Shipping\Engine\ZoneMatcher;
 use App\Modules\Shipping\Http\Requests\Admin\SaveZoneRequest;
 use App\Modules\Shipping\Http\Resources\Admin\ZoneResource;
-use App\Modules\Shipping\Domain\Config\ZoneConfig;
 use App\Modules\Shipping\Models\IbgeCity;
 use App\Modules\Shipping\Models\ShippingZone;
 use App\Modules\Shipping\PostalCode\DestinationResolver;
@@ -19,7 +18,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 
 final class ShippingZoneController
 {

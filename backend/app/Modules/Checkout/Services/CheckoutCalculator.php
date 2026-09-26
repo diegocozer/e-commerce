@@ -17,6 +17,7 @@ use App\Modules\Customers\DTOs\CustomerData;
 use App\Modules\Customers\Enums\CustomerType;
 use App\Modules\Inventory\Exceptions\InsufficientStock;
 use App\Modules\Orders\Contracts\OrderPlacement;
+use App\Modules\Orders\Exceptions\TooManyPendingOrders;
 use App\Modules\Pricing\Contracts\CouponService;
 use App\Modules\Pricing\DTOs\CouponEvaluation;
 use App\Modules\Pricing\Exceptions\CouponInvalid;
@@ -67,7 +68,7 @@ final class CheckoutCalculator
         $pending = $this->orders->pendingOrders($data->customerId);
         if (count($pending) >= self::MAX_PENDING_ORDERS) {
             if ($strict) {
-                throw \App\Modules\Orders\Exceptions\TooManyPendingOrders::with($pending);
+                throw TooManyPendingOrders::with($pending);
             }
             $block('too_many_pending_orders', 'Você já possui 3 pedidos aguardando pagamento.');
         }

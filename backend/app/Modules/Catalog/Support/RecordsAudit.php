@@ -17,6 +17,6 @@ trait RecordsAudit
      */
     protected function audit(string $action, string $type, ?int $id, array $before = [], array $after = []): void
     {
-        app(AuditLogger::class)->record(AuditEntry::diff(ActorRef::current(), $action, $type, $id, $before, $after));
+        app(AuditLogger::class)->record(AuditEntry::diff(ActorRef::current(), $action, $id !== null ? $type : null, $id, $before, $after));
     }
 }

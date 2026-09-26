@@ -25,7 +25,7 @@ final class PlaceCheckoutRequest extends CheckoutPreviewRequest
 
     public function after(): array
     {
-        return [function (Validator $validator): void {
+        return [...parent::after(), function (Validator $validator): void {
             if (! Str::isUuid((string) $this->header('Idempotency-Key', ''))) {
                 $validator->errors()->add('idempotency_key', 'O cabeçalho Idempotency-Key (UUID) é obrigatório.');
             }

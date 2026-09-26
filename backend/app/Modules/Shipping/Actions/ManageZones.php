@@ -20,7 +20,7 @@ final class ManageZones
     public function create(array $data, ActorRef $actor): ShippingZone
     {
         return DB::transaction(function () use ($data, $actor): ShippingZone {
-            $zone = ShippingZone::query()->create(array_intersect_key($data, array_flip(['name', 'description', 'is_active'])));
+            $zone = ShippingZone::query()->create(array_intersect_key($data, array_flip(['name', 'description', 'is_active'])))->refresh();
             $this->syncLocations($zone, $data);
             $this->support->record($actor, 'shipping_zone', 'created', $zone->id, [], $this->auditState($zone));
 

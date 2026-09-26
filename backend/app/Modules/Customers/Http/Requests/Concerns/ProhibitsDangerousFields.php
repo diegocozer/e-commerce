@@ -27,7 +27,7 @@ trait ProhibitsDangerousFields
     {
         $rules = [];
         foreach ([...self::$dangerousFields, ...$extra] as $field) {
-            $rules[$field] = ['prohibited'];
+            $rules[$field] = [new NotPresent($field)];
         }
 
         return $rules;

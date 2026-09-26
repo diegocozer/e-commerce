@@ -84,6 +84,20 @@ final class CartCouponMergeShippingTest extends TestCase
         $this->getJson('/api/v1/cart', ['X-Cart-Token' => $guest])->assertNotFound();
     }
 
+    public function test_login_endpoint_merges_the_guest_cart(): void
+    {
+        $guest = $this->addItem(['variant_id' => $this->variantId('VIN-BR-122-BR'), 'quantity' => 5])->json('data.token');
+
+        $this->withHeaders(['Referer' => 'http://localhost/']); // stateful SPA request (Sanctum)
+        $this->postJson('/api/v1/auth/login', ['email' => 'maria@example.com', 'password' => 'password'], ['X-Cart-Token' => $guest])
+            ->assertOk()
+            ->assertJsonPath('data.cart_merge.merged', true)
+            ->assertJsonPath('data.cart_merge.lines_added', 1);
+
+        $this->getJson('/api/v1/cart')->assertOk()->assertJsonPath('data.owner', 'customer')
+            ->assertJsonPath('data.items.0.line_total_cents', 7950);
+    }
+
     public function test_merge_without_customer_cart_moves_items_and_reports_stock_and_unavailable(): void
     {
         $joao = $this->joao();

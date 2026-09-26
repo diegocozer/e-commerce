@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Shipping;
 
+use App\Modules\Shipping\DTOs\CartLineLogisticsInput;
 use App\Modules\Shipping\Enums\FreeShippingReason;
+use App\Modules\Shipping\Enums\ShippingMethodType;
 use App\Modules\Shipping\Enums\ShippingPriceType;
-use App\Modules\Shipping\Enums\UnavailableReason;
 use App\Modules\Shipping\Enums\WeightBasis;
 use App\Modules\Shipping\Models\ShippingCarrier;
 use App\Modules\Shipping\Support\FakeMonotonicClock;
@@ -14,7 +15,6 @@ use App\Modules\Shipping\Support\MonotonicClock;
 use App\Shared\Domain\PackageDimensions;
 use App\Shared\Domain\Quantity;
 use App\Shared\Domain\SaleUnit;
-use App\Modules\Shipping\DTOs\CartLineLogisticsInput;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -291,7 +291,7 @@ final class ShippingEngineMatrixTest extends TestCase
 
     public function test_t36_state_zone_matches_through_cep_range_fallback(): void
     {
-        $method = $this->method('table-sc', 'SC', \App\Modules\Shipping\Enums\ShippingMethodType::TableRate, 50, 3, 6, true);
+        $method = $this->method('table-sc', 'SC', ShippingMethodType::TableRate, 50, 3, 6, true);
         $this->methods['sc'] = $method;
         $this->rule('sc', 'sc', 'SC', 100, [], ShippingPriceType::Fixed, 3500);
         $this->postalLookup()->notFound('89999000');

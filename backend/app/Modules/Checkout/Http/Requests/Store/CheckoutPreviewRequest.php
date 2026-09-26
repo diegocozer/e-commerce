@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Checkout\Http\Requests\Store;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 /** POST /checkout/preview (API.md §3.E). */
 class CheckoutPreviewRequest extends FormRequest
@@ -28,6 +29,19 @@ class CheckoutPreviewRequest extends FormRequest
             'shipping_option_id' => ['nullable', 'required_with:shipping_quote_id', 'string', 'max:100'],
             'payment_method' => ['required', 'in:pix'],
         ];
+    }
+
+    /** `prohibited` lets null/empty values through; API.md §1.7 rejects them too (even null). */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $input = $this->all();
+            foreach (self::PROHIBITED as $field) {
+                if (array_key_exists($field, $input) && ! $validator->errors()->has($field)) {
+                    $validator->errors()->add($field, "O campo {$field} não é permitido.");
+                }
+            }
+        }];
     }
 
     /** @return array<string, string> */

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Cart\Actions;
 
 use App\Modules\Cart\Contracts\CartService;
-use App\Modules\Cart\Exceptions\CartNotFound;
 use App\Modules\Cart\Models\Cart;
 use App\Modules\Cart\Services\CartCalculator;
 use App\Modules\Cart\Services\CartLocator;

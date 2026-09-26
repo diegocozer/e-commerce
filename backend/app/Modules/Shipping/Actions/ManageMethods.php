@@ -24,7 +24,7 @@ final class ManageMethods
                 'accepts_free_shipping_coupon' => $type === ShippingMethodType::OwnDelivery || $type === ShippingMethodType::TableRate,
                 'position' => (int) ShippingMethod::query()->max('position') + 10,
             ];
-            $method = ShippingMethod::query()->create($attributes);
+            $method = ShippingMethod::query()->create($attributes)->refresh();
             $this->support->record($actor, 'shipping_method', 'created', $method->id, [], ShippingAdminSupport::snapshot($method));
 
             return $method;
