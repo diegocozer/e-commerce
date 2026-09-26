@@ -7,7 +7,9 @@ namespace App\Modules\Cart\Providers;
 use App\Modules\Cart\Console\PurgeExpiredCarts;
 use App\Modules\Cart\Contracts\CartPresenter;
 use App\Modules\Cart\Contracts\CartService;
+use App\Modules\Cart\Contracts\ReorderOffers;
 use App\Modules\Cart\Services\CartView;
+use App\Modules\Cart\Services\CatalogReorderOffers;
 use App\Modules\Cart\Services\EloquentCartService;
 use App\Modules\Customers\Contracts\GuestCartMerger;
 use App\Shared\Providers\ModuleServiceProvider;
@@ -20,6 +22,7 @@ final class CartServiceProvider extends ModuleServiceProvider
         CartService::class => EloquentCartService::class,
         GuestCartMerger::class => EloquentCartService::class,
         CartPresenter::class => CartView::class,
+        ReorderOffers::class => CatalogReorderOffers::class,
     ];
 
     /** @var array<class-string, list<class-string>> */

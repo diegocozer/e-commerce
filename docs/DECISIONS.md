@@ -441,3 +441,42 @@ MVP. `Settings` é módulo-base e pode ser consumido por `Cart`.
   a loja deve ocultá-lo até existir o endpoint.
 - Quantidades trafegam como números JSON; a loja nunca arredonda quantidade
   inválida — mostra sugestões ("Usar X").
+
+## ADR-035 — Integração loja ↔ backend real (fechamento da ADR-034)
+
+Contexto: a loja só tinha rodado contra MSW. A suíte Playwright `storefront/e2e/` passou a
+dirigir a stack real (Laravel :8000 + Vite :5173 com proxy `/api` e `/sanctum`).
+
+Decisões:
+
+- **Cache com allow-list de classes.** `config/cache.php` mantém `serializable_classes`
+  fechado, liberando apenas os value objects do snapshot de frete
+  (`ShippingConfigRepository::snapshot()`: `ShippingConfigSnapshot`, `MethodConfig`,
+  `RuleConfig`, `ZoneConfig`, `CarrierConfig`, `PickupAddress` e enums). Com `false`, stores
+  reais (database/redis) devolviam `__PHP_Incomplete_Class` e toda cotação a partir da 2ª dava
+  500 (os testes usam store `array` sem serialização e não pegavam). Novo objeto em cache ⇒
+  incluir na lista (teste `ShippingConfigCacheSerializationTest`).
+- **Sandbox em dev.** `SANDBOX_WEBHOOK_SECRET` vazio (como no `.env.example`) cai no segredo de
+  dev (`?:` em vez do default do `env()`), senão `POST /dev/payments/{uuid}/approve` dava 500.
+  O webhook assinado é processado na fila `webhooks`: em dev é preciso um
+  `php artisan queue:work --queue=webhooks,default,notifications` (o `npm run e2e` sobe um).
+- **CEP em dev sem rede:** `SHIPPING_POSTAL_LOOKUP=fake` (`FakePostalCodeLookup`: CEPs exatos +
+  faixas de Blumenau, Joinville, Gaspar, Indaial, Pomerode, Florianópolis, Curitiba, São Paulo).
+  Produção continua `viacep`.
+- **`GET /me/reorder-suggestions`** (estava na API.md e na loja, faltava no backend) —
+  interpretação: "pedidos pagos" = `paid_at` preenchido e status ≠ `cancelled`; ordem = pedido
+  mais recente primeiro e, dentro dele, a ordem dos itens; uma sugestão por variante (a
+  configuração mais recente); `current_unit_price_cents`/`price_source` resolvidos para o
+  cliente na quantidade faturada da última compra (faixas de atacado coerentes com o que ele
+  costuma comprar); variantes inativas ou `out_of_stock` ficam de fora; `limit` 1–12 (422 fora).
+  Checkout não depende de Catalog (ADR-018): o Cart expõe o contrato `ReorderOffers`
+  (dados de card + preço + disponibilidade), implementado com Catalog/Inventory/Pricing.
+- **ADR-034 aplicada:** `verificar-email` reservado no backend (validação de slug do catálogo,
+  regex das rotas-shell de SEO e `robots.txt`); 409 `price_changed` confirmado com
+  `CheckoutSummary` completo (mesmo builder do preview; teste de estrutura + e2e); link
+  "Baixar meus dados" removido da loja; workaround `rollPackages()` do carrinho removido
+  (Catalog já preenche `VariantData::$package` para rolos).
+- **Loja:** após `POST /checkout` a página do checkout congelava o passo e ia para o pedido
+  (antes, `reset()` + carrinho vazio sobrescreviam a navegação e o cliente caía em
+  `/carrinho`); `/verificar-email` sem os parâmetros assinados mostra "link inválido" sem
+  chamar a API.

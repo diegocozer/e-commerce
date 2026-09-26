@@ -9,7 +9,7 @@ import StepButton from '@mui/material/StepButton';
 import Stepper from '@mui/material/Stepper';
 import Typography from '@mui/material/Typography';
 import { useCallback, useEffect, useState } from 'react';
-import { Link as RouterLink, Navigate, useNavigate, useSearchParams } from 'react-router';
+import { Link as RouterLink, Navigate, useSearchParams } from 'react-router';
 import { useAuth } from '@/features/auth';
 import { useCart } from '@/features/cart';
 import { useSettings } from '@/features/catalog/hooks/queries';
@@ -40,9 +40,11 @@ export default function CheckoutPage({ retryDelaysMs }: { retryDelaysMs?: number
   const cart = useCart();
   const settings = useSettings();
   const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
   const { state, update, reset } = useCheckoutState();
   const [notice, setNotice] = useState<string | null>(null);
+  // Pedido criado: congela o passo e o redirecionamento para o carrinho (o carrinho
+  // fica vazio e o reset do estado mudaria `passo`, sobrescrevendo a navegação).
+  const [placedUuid, setPlacedUuid] = useState<string | null>(null);
   const selection = state.quote?.quote_id && state.optionId ? { quoteId: state.quote.quote_id, optionId: state.optionId } : null;
   const cartWithShipping = useCart(selection);
 
@@ -72,13 +74,13 @@ export default function CheckoutPage({ retryDelaysMs }: { retryDelaysMs?: number
   );
 
   useEffect(() => {
-    if (!customer) return; // aguarda /me antes de decidir o passo
+    if (!customer || placedUuid) return; // aguarda /me antes de decidir o passo
     if (params.get('passo') !== current) {
       const next = new URLSearchParams(params);
       next.set('passo', current);
       setParams(next, { replace: true });
     }
-  }, [current, params, setParams, customer]);
+  }, [current, params, setParams, customer, placedUuid]);
 
   const onSelectAddress = useCallback((uuid: string) => update((s) => (s.addressUuid === uuid ? {} : { addressUuid: uuid, quote: null, optionId: null })), [update]);
   const onShippingConflict = useCallback(
@@ -89,6 +91,7 @@ export default function CheckoutPage({ retryDelaysMs }: { retryDelaysMs?: number
     [update, go],
   );
 
+  if (placedUuid) return <Navigate to={`/checkout/pedido/${placedUuid}`} replace />;
   if (!customer) return null;
   if (cart.isLoading) return <Skeleton variant="rectangular" height={320} />;
   if (cart.error) return <ErrorState error={cart.error} onRetry={() => void cart.refetch()} />;
@@ -161,7 +164,7 @@ export default function CheckoutPage({ retryDelaysMs }: { retryDelaysMs?: number
                 onShippingConflict={onShippingConflict}
                 onPlaced={(uuid) => {
                   reset();
-                  navigate(`/checkout/pedido/${uuid}`, { replace: true });
+                  setPlacedUuid(uuid);
                 }}
                 retryDelaysMs={retryDelaysMs}
               />

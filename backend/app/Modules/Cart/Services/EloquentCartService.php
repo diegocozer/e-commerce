@@ -13,7 +13,6 @@ use App\Modules\Catalog\Contracts\CatalogQuery;
 use App\Modules\Catalog\Contracts\SaleQuantityResolver;
 use App\Modules\Catalog\DTOs\VariantData;
 use App\Modules\Catalog\Exceptions\InvalidSaleQuantity;
-use App\Modules\Catalog\Models\ProductVariant;
 use App\Modules\Customers\Contracts\GuestCartMerger;
 use App\Modules\Customers\DTOs\CartMergeReport;
 use App\Modules\Inventory\Contracts\InventoryService;
@@ -22,7 +21,6 @@ use App\Modules\Pricing\DTOs\CouponContext;
 use App\Modules\Pricing\DTOs\CouponLine;
 use App\Modules\Shipping\DTOs\CartLineLogisticsInput;
 use App\Shared\Domain\Money;
-use App\Shared\Domain\PackageDimensions;
 use App\Shared\Domain\Quantity;
 use App\Shared\Domain\SaleUnit;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +52,6 @@ final class EloquentCartService implements CartService, GuestCartMerger
 
     public function toShippingLines(CartSnapshot $cart): array
     {
-        $rollPackages = $this->rollPackages($cart);
         $lines = [];
         foreach ($cart->priceableLines() as $line) {
             $v = $line->variant;
@@ -71,7 +68,7 @@ final class EloquentCartService implements CartService, GuestCartMerger
                 heightMm: $area ? ($b->heightMm ?? $line->input->heightMm) : null,
                 pieces: $area ? ($b->pieces ?? $line->input->pieces) : null,
                 weightGrams: $v->weightGrams,
-                package: $v->package ?? ($rollPackages[$v->id] ?? null),
+                package: $v->package,
                 unitsPerPackage: $v->unitsPerPackage,
                 fixedWidthMm: $v->fixedWidthMm,
                 pickupOnly: $v->pickupOnly,
@@ -81,36 +78,6 @@ final class EloquentCartService implements CartService, GuestCartMerger
         }
 
         return $lines;
-    }
-
-    /**
-     * Workaround (reported): Catalog's VariantData::$package is null when
-     * package_length_cm is null, but rolls (LINEAR_METER/SQUARE_METER) only need the
-     * diameter (width/height) — SHIPPING.md §2.3. Rebuild it read-only from the variant.
-     *
-     * @return array<int, PackageDimensions>
-     */
-    private function rollPackages(CartSnapshot $cart): array
-    {
-        $ids = [];
-        foreach ($cart->lines as $line) {
-            if ($line->variant !== null && $line->variant->package === null
-                && in_array($line->variant->saleUnit, [SaleUnit::LinearMeter, SaleUnit::SquareMeter], true)) {
-                $ids[] = $line->variantId;
-            }
-        }
-        if ($ids === []) {
-            return [];
-        }
-        $packages = [];
-        foreach (ProductVariant::query()->whereKey($ids)->get(['id', 'package_width_cm', 'package_height_cm']) as $row) {
-            if ($row->package_width_cm !== null && $row->package_height_cm !== null) {
-                $w = (string) $row->package_width_cm;
-                $packages[(int) $row->id] = PackageDimensions::fromCentimeters($w, $w, (string) $row->package_height_cm);
-            }
-        }
-
-        return $packages;
     }
 
     public function shippingLinesForItems(array $items, ?int $customerId = null): array

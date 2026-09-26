@@ -43,6 +43,7 @@ final class AdminCategoryBrandTest extends CatalogTestCase
         $this->patchJson('/api/v1/admin/categories/'.$root->json('data.id'), ['parent_id' => $grand->json('data.id')])->assertStatus(422)->assertJsonValidationErrors('parent_id');
 
         $this->postJson('/api/v1/admin/categories', ['name' => 'Xx', 'slug' => 'checkout'])->assertStatus(422)->assertJsonValidationErrors('slug');
+        $this->postJson('/api/v1/admin/categories', ['name' => 'Xx', 'slug' => 'verificar-email'])->assertStatus(422)->assertJsonValidationErrors('slug');
         $this->postJson('/api/v1/admin/categories', ['name' => 'Xx', 'slug' => 'Invalid Slug'])->assertStatus(422)->assertJsonValidationErrors('slug');
         $this->postJson('/api/v1/admin/categories', ['name' => 'Xx', 'products_count' => 3])->assertStatus(422)->assertJsonValidationErrors('products_count');
 

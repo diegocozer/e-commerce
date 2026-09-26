@@ -4,12 +4,14 @@ import { defineConfig, devices } from '@playwright/test';
 // Pré-requisitos do backend: banco semeado (`php artisan migrate:fresh --seed`),
 // PAYMENTS_DRIVER=sandbox, APP_ENV=local (rota /api/v1/dev/payments/{uuid}/approve)
 // e SHIPPING_POSTAL_LOOKUP=fake quando o ViaCEP não estiver acessível.
+// Um worker de filas (`php artisan queue:work`) é necessário para o PIX virar "pago".
 // Os servidores são reaproveitados se já estiverem rodando.
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
 const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8000';
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
@@ -32,6 +34,14 @@ export default defineConfig({
       url: `${API_URL}/api/v1/settings/public`,
       reuseExistingServer: true,
       timeout: 60_000,
+    },
+    {
+      // Worker de filas: o webhook sandbox (aprovar PIX) é processado na fila `webhooks`.
+      // Sem url/porta: sempre sobe um worker extra durante a suíte (inofensivo se já houver outro).
+      command: 'php artisan queue:work --queue=webhooks,default,notifications --tries=3 --sleep=1',
+      cwd: '../backend',
+      stdout: 'ignore',
+      stderr: 'ignore',
     },
     {
       command: 'npm run dev',

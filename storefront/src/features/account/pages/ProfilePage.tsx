@@ -15,7 +15,6 @@ import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { authKeys, useAuth } from '@/features/auth';
 import { useSettings } from '@/features/catalog/hooks/queries';
-import { API_BASE } from '@/shared/api/client';
 import type { Customer } from '@/shared/api/types';
 import { formatCNPJ, formatCPF, isValidCPF, normalizeCNPJ } from '@/shared/formatters/document';
 import { formatPhone } from '@/shared/formatters/phone';
@@ -140,7 +139,7 @@ export default function ProfilePage() {
         <Card sx={{ p: 4 }}>
           <Typography variant="h4" component="h2" sx={{ mb: 2 }}>Privacidade</Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <Button variant="outlined" href={`${API_BASE}/me/data-export`} download="meus-dados.json">Baixar meus dados</Button>
+            {/* "Baixar meus dados" (GET /me/data-export) fica oculto: endpoint fora do MVP (ADR-026/ADR-034). */}
             {email ? <Button variant="text" color="error" href={`mailto:${email}?subject=${encodeURIComponent('Solicitação de exclusão de conta (LGPD)')}`}>Solicitar exclusão da conta</Button> : null}
           </Stack>
           <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 2 }}>

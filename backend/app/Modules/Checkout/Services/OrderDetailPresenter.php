@@ -146,15 +146,32 @@ final class OrderDetailPresenter
         ];
     }
 
+    /** @return array{quantity: int|float|null, width_m: int|float|null, height_m: int|float|null, pieces: int|null} LineConfiguration */
+    public static function configuration(OrderItem $i): array
+    {
+        $m = static fn (?int $mm): int|float|null => $mm !== null ? Quantity::fromMilli($mm)->toNumber() : null;
+
+        return [
+            'quantity' => $i->quantity?->toNumber(),
+            'width_m' => $m($i->width_mm),
+            'height_m' => $m($i->height_mm),
+            'pieces' => $i->pieces,
+        ];
+    }
+
+    /** "5 m" | "1,20 m × 2,50 m × 1 peça" */
+    public static function configurationLabel(OrderItem $i): string
+    {
+        return $i->sale_unit === SaleUnit::SquareMeter
+            ? Quantity::fromMilli((int) $i->width_mm)->format().' m × '.Quantity::fromMilli((int) $i->height_mm)->format().' m × '
+                .$i->pieces.((int) $i->pieces === 1 ? ' peça' : ' peças')
+            : rtrim(rtrim(($i->quantity ?? $i->billable_quantity)->format(3), '0'), ',').' '.$i->sale_unit->abbreviation();
+    }
+
     /** @return array<string, mixed> */
     private static function item(OrderItem $i): array
     {
         $isArea = $i->sale_unit === SaleUnit::SquareMeter;
-        $m = static fn (?int $mm): int|float|null => $mm !== null ? Quantity::fromMilli($mm)->toNumber() : null;
-        $label = $isArea
-            ? Quantity::fromMilli((int) $i->width_mm)->format().' m × '.Quantity::fromMilli((int) $i->height_mm)->format().' m × '
-                .$i->pieces.((int) $i->pieces === 1 ? ' peça' : ' peças')
-            : rtrim(rtrim(($i->quantity ?? $i->billable_quantity)->format(3), '0'), ',').' '.$i->sale_unit->abbreviation();
 
         return [
             'product_id' => $i->product_id,
@@ -164,13 +181,8 @@ final class OrderDetailPresenter
             'product_url_path' => null,
             'sale_unit' => $i->sale_unit->value,
             'sale_unit_abbr' => $i->sale_unit->abbreviation(),
-            'configuration' => [
-                'quantity' => $i->quantity?->toNumber(),
-                'width_m' => $m($i->width_mm),
-                'height_m' => $m($i->height_mm),
-                'pieces' => $i->pieces,
-            ],
-            'configuration_label' => $label,
+            'configuration' => self::configuration($i),
+            'configuration_label' => self::configurationLabel($i),
             'billable_quantity' => $i->billable_quantity->toNumber(),
             'stock_quantity' => $i->stock_quantity->toNumber(),
             'area_m2' => $isArea ? $i->stock_quantity->toNumber() : null,

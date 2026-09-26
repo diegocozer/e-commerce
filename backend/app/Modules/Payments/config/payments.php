@@ -10,7 +10,8 @@ return [
 
     'drivers' => [
         'sandbox' => [
-            'webhook_secret' => env('SANDBOX_WEBHOOK_SECRET', 'sandbox-secret-dev'),
+            // Empty value in .env (as in .env.example) falls back to the dev secret; sandbox never runs in production.
+            'webhook_secret' => env('SANDBOX_WEBHOOK_SECRET') ?: 'sandbox-secret-dev',
             'webhook_secret_previous' => env('SANDBOX_WEBHOOK_SECRET_PREVIOUS'),
         ],
         'mercadopago' => [

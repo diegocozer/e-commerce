@@ -234,7 +234,13 @@ final class CheckoutTest extends TestCase
             ->assertJsonPath('code', 'price_changed')
             ->assertJsonPath('summary.totals.subtotal_cents', 8250)
             ->assertJsonPath('summary.totals.total_cents', 10250)
-            ->assertJsonPath('summary.items.0.warnings.0.code', 'price_changed');
+            ->assertJsonPath('summary.items.0.warnings.0.code', 'price_changed')
+            // ADR-034: the 409 carries a complete CheckoutSummary (same shape as /checkout/preview)
+            ->assertJsonStructure(['summary' => [
+                'items', 'coupon', 'totals' => ['subtotal_cents', 'discount_cents', 'shipping_cents', 'shipping_discount_cents', 'total_cents'],
+                'total_weight_grams', 'address', 'shipping_option', 'shipping_quote', 'payment_method', 'payment_expires_in_minutes',
+                'billing', 'can_place_order', 'blocking',
+            ]]);
         self::assertSame(0, Order::query()->count());
 
         $this->checkout($this->body(['expected_total_cents' => 10250]))->assertCreated()->assertJsonPath('data.order.total_cents', 10250);

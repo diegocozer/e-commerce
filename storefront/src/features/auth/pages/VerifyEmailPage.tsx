@@ -10,14 +10,19 @@ import { AuthCard } from '../components/AuthCard';
 
 export default function VerifyEmailPage() {
   const [params] = useSearchParams();
-  const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading');
+  const input = { uuid: params.get('uuid') ?? '', hash: params.get('hash') ?? '', expires: params.get('expires') ?? '', signature: params.get('signature') ?? '' };
+  // Link incompleto: nem chama a API (evita 422 inútil) — mostra "link inválido".
+  const complete = Object.values(input).every(Boolean);
+  const [state, setState] = useState<'loading' | 'ok' | 'error'>(complete ? 'loading' : 'error');
   const sent = useRef(false);
   useEffect(() => {
-    if (sent.current) return;
+    if (sent.current || !complete) return;
     sent.current = true;
-    const input = { uuid: params.get('uuid') ?? '', hash: params.get('hash') ?? '', expires: params.get('expires') ?? '', signature: params.get('signature') ?? '' };
-    verifyEmail(input).then(() => setState('ok'), () => setState('error'));
-  }, [params]);
+    verifyEmail({ uuid: params.get('uuid') ?? '', hash: params.get('hash') ?? '', expires: params.get('expires') ?? '', signature: params.get('signature') ?? '' }).then(
+      () => setState('ok'),
+      () => setState('error'),
+    );
+  }, [params, complete]);
   return (
     <AuthCard>
       <Seo title="Confirmar e-mail" robots="noindex,nofollow" />

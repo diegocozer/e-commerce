@@ -17,7 +17,7 @@ Route::get('/sitemap.xml', [SitemapController::class, 'show'])->name('sitemap');
 Route::get('/robots.txt', [RobotsController::class, 'show'])->name('robots');
 
 // Slug pattern excluding reserved storefront/infrastructure segments (ADR-015/026a).
-$reserved = 'busca|carrinho|checkout|conta|entrar|cadastro|recuperar-senha|redefinir-senha|institucional|admin|api|sanctum|storage|up|health';
+$reserved = 'busca|carrinho|checkout|conta|entrar|cadastro|recuperar-senha|redefinir-senha|verificar-email|institucional|admin|api|sanctum|storage|up|health';
 $slug = '(?!(?:'.$reserved.')(?![a-z0-9-]))[a-z0-9]+(?:-[a-z0-9]+)*';
 
 Route::get('/{category}/{product}', [ShellController::class, 'show'])

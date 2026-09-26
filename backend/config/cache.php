@@ -1,5 +1,15 @@
 <?php
 
+use App\Modules\Shipping\Domain\Config\MethodConfig;
+use App\Modules\Shipping\Domain\Config\RuleConfig;
+use App\Modules\Shipping\Domain\Config\ShippingConfigSnapshot;
+use App\Modules\Shipping\Domain\Config\ZoneConfig;
+use App\Modules\Shipping\DTOs\CarrierConfig;
+use App\Modules\Shipping\DTOs\PickupAddress;
+use App\Modules\Shipping\Enums\ShippingMethodType;
+use App\Modules\Shipping\Enums\ShippingPriceType;
+use App\Modules\Shipping\Enums\WeightBasis;
+
 return [
 
     /*
@@ -129,6 +139,19 @@ return [
     |
     */
 
-    'serializable_classes' => false,
+    // Allow-list explícita (ADR-035): só os value objects imutáveis do snapshot de
+    // configuração de frete (ShippingConfigRepository::snapshot) vão ao cache.
+    // Com `false`, stores reais (database/redis) devolviam __PHP_Incomplete_Class.
+    'serializable_classes' => [
+        ShippingConfigSnapshot::class,
+        MethodConfig::class,
+        RuleConfig::class,
+        ZoneConfig::class,
+        CarrierConfig::class,
+        PickupAddress::class,
+        ShippingMethodType::class,
+        WeightBasis::class,
+        ShippingPriceType::class,
+    ],
 
 ];

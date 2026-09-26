@@ -81,6 +81,7 @@ final class SeoTest extends CatalogTestCase
     public function test_reserved_paths_are_not_captured(): void
     {
         $this->get('/checkout')->assertNotFound();
+        $this->get('/verificar-email')->assertNotFound(); // ADR-034: SPA route, never a category shell
         self::assertStringNotContainsString('noindex', (string) $this->get('/checkout')->getContent());
         $this->getJson('/api/v1/categories')->assertOk();
     }

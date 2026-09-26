@@ -8,7 +8,7 @@ return [
     // Public storefront URL used for canonical links (APP_URL when null).
     'storefront_url' => env('STOREFRONT_URL'),
     'reserved_slugs' => [
-        'busca', 'carrinho', 'checkout', 'conta', 'entrar', 'cadastro', 'recuperar-senha', 'redefinir-senha',
+        'busca', 'carrinho', 'checkout', 'conta', 'entrar', 'cadastro', 'recuperar-senha', 'redefinir-senha', 'verificar-email',
         'institucional', 'admin', 'api', 'sanctum', 'sitemap.xml', 'robots.txt',
     ],
 ];

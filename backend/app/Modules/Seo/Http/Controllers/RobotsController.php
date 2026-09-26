@@ -15,7 +15,7 @@ final class RobotsController
             $body = "User-agent: *\nDisallow: /\n";
         } else {
             $lines = ['User-agent: *'];
-            foreach (['/carrinho', '/checkout', '/conta', '/entrar', '/cadastro', '/recuperar-senha', '/redefinir-senha', '/admin', '/api/'] as $path) {
+            foreach (['/carrinho', '/checkout', '/conta', '/entrar', '/cadastro', '/recuperar-senha', '/redefinir-senha', '/verificar-email', '/admin', '/api/'] as $path) {
                 $lines[] = 'Disallow: '.$path;
             }
             $lines[] = 'Allow: /';

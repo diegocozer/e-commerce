@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { expect, type Page } from '@playwright/test';
 
 /** Espaço comum ou NBSP entre "R$" e o valor (Intl pt-BR usa NBSP). */
@@ -47,4 +48,39 @@ export async function searchAndOpenProduct(page: Page, term: string, productName
   await expect(page).toHaveURL(/\/busca\?q=/);
   await page.getByRole('link', { name: productName }).first().click();
   await expect(page.getByRole('heading', { level: 1, name: productName })).toBeVisible();
+}
+
+/** POST autenticado pela sessão do navegador (cookies + X-XSRF-TOKEN), fora da UI. */
+export async function browserPost(page: Page, path: string, body: unknown = {}): Promise<number> {
+  return page.evaluate(
+    async ({ url, payload }) => {
+      const xsrf = decodeURIComponent(document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))?.slice(11) ?? '');
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf },
+        body: JSON.stringify(payload),
+      });
+      return res.status;
+    },
+    { url: path, payload: body },
+  );
+}
+
+/** SQL direto no banco de desenvolvimento (simula mudanças feitas pelo admin durante o checkout). */
+export function devSql(sql: string): void {
+  const db = process.env.E2E_DB_NAME ?? 'ecommerce';
+  execFileSync('psql', ['-h', process.env.E2E_DB_HOST ?? '127.0.0.1', '-U', process.env.E2E_DB_USER ?? 'ecommerce', '-d', db, '-v', 'ON_ERROR_STOP=1', '-c', sql], {
+    env: { ...process.env, PGPASSWORD: process.env.E2E_DB_PASSWORD ?? 'secret' },
+    stdio: 'pipe',
+  });
+}
+
+export async function loginAs(page: Page, email: string, password: string): Promise<void> {
+  await page.goto('/entrar');
+  const form = page.getByRole('main');
+  await form.getByRole('textbox', { name: 'E-mail' }).fill(email);
+  await form.getByRole('textbox', { name: 'Senha' }).fill(password);
+  await form.getByRole('button', { name: 'Entrar' }).click();
+  await expect(page).not.toHaveURL(/\/entrar/);
 }

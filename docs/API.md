@@ -1749,7 +1749,7 @@ Paginated<ProductCard> & {
 | Rota | Resposta |
 |---|---|
 | `GET /sitemap.xml` | `application/xml`; home, categorias ativas e produtos ativos (`<loc>` absoluto canônico, `<lastmod>` = `updated_at`). Cache 6 h, invalidado por `ProductSaved/Deleted`, `CategoryTreeChanged`. |
-| `GET /robots.txt` | `text/plain`: `Disallow: /carrinho`, `/checkout`, `/conta`, `/entrar`, `/cadastro`, `/recuperar-senha`, `/redefinir-senha`, `/admin`, `/api/`; `Allow: /`; `Sitemap: {APP_URL}/sitemap.xml`. Em `staging`: `Disallow: /`. |
+| `GET /robots.txt` | `text/plain`: `Disallow: /carrinho`, `/checkout`, `/conta`, `/entrar`, `/cadastro`, `/recuperar-senha`, `/redefinir-senha`, `/verificar-email`, `/admin`, `/api/`; `Allow: /`; `Sitemap: {APP_URL}/sitemap.xml`. Em `staging`: `Disallow: /`. |
 | Shell (`@seo_shell` do nginx) | Para `GET /{category}` e `GET /{category}/{product}` que não são arquivos nem rotas reservadas, nginx encaminha ao `Seo\ShellController`, que lê o `index.html` da loja (`SEO_SHELL_INDEX_PATH`) e substitui o marcador `<!--seo:head-->` por `<title>`, `meta description`, `link rel=canonical`, OG e `<script type="application/ld+json">` (Product + BreadcrumbList; preço do JSON-LD = visitante na quantidade mínima, RN-BUS-006). Status **200** (encontrado), **404** + `noindex` (slug inexistente/inativo, mesmo HTML), **301** (produto acessado por categoria não canônica → `/{primary}/{product}`). Escape: `e()` nas metas; JSON-LD com `JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT`. Cache `seo:shell:{path}` 15 min. Sem sessão. |
 
 A SPA **não** chama o shell; ela usa `GET /categories/{slug}` e `GET /products/{slug}`
@@ -2231,7 +2231,7 @@ com `estimated_delivery_date <= hoje`. Front: `refetchInterval` 60 s.
 **Body (criar/editar):** `name` (required, 2–120), `slug` (opcional na criação — gerado do
 nome; `^[a-z0-9]+(-[a-z0-9]+)*$`, ≤ 140, único entre não excluídos, **não reservado**:
 `busca, carrinho, checkout, conta, entrar, cadastro, recuperar-senha, redefinir-senha,
-institucional, admin, api, sanctum, sitemap.xml, robots.txt`), `parent_id` (nullable; sem
+verificar-email, institucional, admin, api, sanctum, sitemap.xml, robots.txt`), `parent_id` (nullable; sem
 ciclo; profundidade resultante ≤ 3), `description_html` (≤ 20 000, sanitizado — ADR-024),
 `meta_title` (≤ 120), `meta_description` (≤ 320), `is_active` (boolean; desativar sujeito a
 RN-CAT-008 → 409), `position` (int ≥ 0). **Proibidos:** `products_count`, `depth`.
