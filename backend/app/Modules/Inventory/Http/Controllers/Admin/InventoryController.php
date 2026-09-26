@@ -19,6 +19,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -187,7 +188,7 @@ final class InventoryController
         return new JsonResponse(InventoryPresenter::paginated($page, $this->presenter->movements($page->getCollection())));
     }
 
-    /** @param  \Illuminate\Support\Collection<int, InventoryMovement>  $rows */
+    /** @param  Collection<int, InventoryMovement>  $rows */
     private function csv($rows): StreamedResponse
     {
         $data = $this->presenter->movements($rows);

@@ -12,8 +12,6 @@ use App\Modules\Catalog\Models\ProductVariant;
 use App\Modules\Catalog\Services\ProductActivation;
 use App\Modules\Catalog\Support\RecordsAudit;
 use App\Modules\Catalog\Support\SlugRules;
-use Illuminate\Contracts\Auth\Access\Authorizable;
-use Illuminate\Contracts\Auth\Authenticatable;
 use App\Modules\Inventory\Contracts\InventoryRecords;
 use App\Modules\Inventory\Contracts\InventoryService;
 use App\Shared\Domain\ActorRef;
@@ -23,6 +21,8 @@ use App\Shared\Support\HtmlSanitizer;
 use App\Shared\Support\PlainText;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\Auth\Access\Authorizable;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 

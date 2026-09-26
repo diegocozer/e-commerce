@@ -88,6 +88,14 @@ final class CartItemsTest extends TestCase
             ->assertUnprocessable()->assertJsonPath('errors.variant_id.0', 'Produto indisponível.');
     }
 
+    public function test_validation_messages_are_in_portuguese(): void
+    {
+        $this->addItem(['variant_id' => 0, 'quantity' => 5])
+            ->assertUnprocessable()->assertJsonPath('errors.variant_id.0', 'O campo variante deve ser pelo menos 1.');
+        $this->addItem(['quantity' => 5])
+            ->assertUnprocessable()->assertJsonPath('errors.variant_id.0', 'O campo variante é obrigatório.');
+    }
+
     public function test_client_prices_are_prohibited_and_nothing_is_saved(): void
     {
         foreach (['unit_price_cents' => 1, 'price' => 1, 'line_total_cents' => 1, 'customer_id' => 1, 'discount_cents' => 0, 'status' => 'ok', 'price_cents' => null] as $field => $value) {

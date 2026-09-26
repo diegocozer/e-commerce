@@ -6,6 +6,8 @@ namespace App\Modules\Inventory\Contracts;
 
 use App\Modules\Inventory\DTOs\StockReservation;
 use App\Modules\Inventory\Exceptions\InsufficientStock;
+use App\Modules\Inventory\Exceptions\InvalidStockAdjustment;
+use App\Modules\Inventory\Exceptions\StaleStock;
 use App\Shared\Domain\ActorRef;
 use App\Shared\Domain\Quantity;
 
@@ -55,8 +57,8 @@ interface InventoryService
     /**
      * Manual adjustment: on_hand = $newOnHand (movement `adjust`).
      *
-     * @throws \App\Modules\Inventory\Exceptions\InvalidStockAdjustment when new < reserved or unchanged
-     * @throws \App\Modules\Inventory\Exceptions\StaleStock when $expectedOnHand differs from the current value
+     * @throws InvalidStockAdjustment when new < reserved or unchanged
+     * @throws StaleStock when $expectedOnHand differs from the current value
      */
     public function adjust(int $variantId, Quantity $newOnHand, string $reason, ActorRef $actor, ?Quantity $expectedOnHand = null): void;
 }

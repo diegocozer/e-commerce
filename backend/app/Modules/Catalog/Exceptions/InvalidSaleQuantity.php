@@ -7,8 +7,8 @@ namespace App\Modules\Catalog\Exceptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Translation\ArrayLoader;
 use Illuminate\Translation\Translator;
-use Illuminate\Validation\Validator;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Validator;
 
 /**
  * 422 for quantity/dimension rules (RN-QTD). Rendered as the standard

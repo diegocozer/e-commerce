@@ -6,6 +6,7 @@ namespace Tests\Feature\Catalog;
 
 use App\Modules\Identity\Enums\AdminPermission;
 use App\Modules\Identity\Models\AdminUser;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Cache;
@@ -31,7 +32,7 @@ abstract class CatalogTestCase extends TestCase
 
     protected function seedDemo(): void
     {
-        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+        $this->seed(DatabaseSeeder::class);
         Cache::flush();
     }
 

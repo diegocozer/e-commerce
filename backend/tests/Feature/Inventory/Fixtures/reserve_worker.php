@@ -13,11 +13,12 @@ use App\Modules\Inventory\DTOs\StockLine;
 use App\Modules\Inventory\DTOs\StockReservation;
 use App\Modules\Inventory\Exceptions\InsufficientStock;
 use App\Shared\Domain\Quantity;
+use Illuminate\Contracts\Console\Kernel;
 
 $root = dirname(__DIR__, 4);
 require $root.'/vendor/autoload.php';
 $app = require $root.'/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
 [, $variantId, $orderId, $quantity, $barrier] = $argv;
 

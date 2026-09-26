@@ -56,6 +56,7 @@ describe('UI sensível a permissões', () => {
     const { router } = renderApp('/marcas', { client });
     await waitFor(() => expect(router.state.location.pathname).toBe('/entrar'));
     expect(router.state.location.search).toContain('expirada=1');
+    expect(router.state.location.search).toContain(`redirect=${encodeURIComponent('/marcas')}`);
     expect(await screen.findByText(/Sua sessão expirou/)).toBeInTheDocument();
   });
 });

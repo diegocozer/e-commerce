@@ -13,6 +13,7 @@ use App\Shared\Domain\Quantity;
 use App\Shared\Domain\SaleUnit;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -103,7 +104,7 @@ final class InventoryPresenter
     }
 
     /**
-     * @param  \Illuminate\Pagination\LengthAwarePaginator<int, mixed>  $paginator
+     * @param  LengthAwarePaginator<int, mixed>  $paginator
      * @param  list<mixed>  $data
      * @return array<string, mixed>
      */

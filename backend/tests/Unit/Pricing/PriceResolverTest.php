@@ -97,7 +97,9 @@ final class PriceResolverTest extends TestCase
     #[DataProvider('scenarios')]
     public function test_business_scenarios(string $qty, ?string $who, string $date, int $unit, string $source, int $total): void
     {
-        $customer = match ($who) { 'wholesale' => $this->wholesaleCustomer, 'marcos' => $this->marcos, default => null };
+        $customer = match ($who) {
+            'wholesale' => $this->wholesaleCustomer, 'marcos' => $this->marcos, default => null
+        };
         $quote = app(PriceResolver::class)->resolve($this->ctx($qty, $customer, $date));
 
         self::assertSame($unit, $quote->unitPrice->cents());

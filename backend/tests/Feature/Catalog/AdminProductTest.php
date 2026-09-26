@@ -10,6 +10,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\ProductVariant;
 use App\Modules\Inventory\Models\Inventory;
+use App\Modules\Orders\Models\Order;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -143,7 +144,7 @@ final class AdminProductTest extends CatalogTestCase
         $this->patchJson("/api/v1/admin/products/{$p['id']}", ['variants' => [['id' => $variantId, 'sku' => 'VIN-TST-01', 'name' => 'x', 'initial_stock' => 5]]])->assertStatus(422);
 
         DB::table('orders')->exists(); // order_items presence locks the sale unit
-        $order = \App\Modules\Orders\Models\Order::factory()->create();
+        $order = Order::factory()->create();
         DB::table('order_items')->insert([
             'order_id' => $order->id, 'variant_id' => $variantId, 'product_id' => $p['id'], 'product_name' => 'x', 'variant_name' => 'x', 'sku' => 'VIN-TST-01',
             'sale_unit' => 'LINEAR_METER', 'quantity' => '1', 'billable_quantity' => '1', 'stock_quantity' => '1', 'base_unit_price_cents' => 1590,

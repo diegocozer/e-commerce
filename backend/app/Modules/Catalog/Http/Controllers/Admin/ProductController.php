@@ -17,6 +17,7 @@ use App\Modules\Catalog\Services\ProductActivation;
 use App\Modules\Catalog\Support\CategoryTree;
 use App\Modules\Catalog\Support\RecordsAudit;
 use App\Modules\Catalog\Support\SlugRules;
+use App\Modules\Inventory\Contracts\InventoryRecords;
 use App\Shared\Domain\SaleUnit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,7 +62,7 @@ final class ProductController
             ->when(($f['status'] ?? 'all') !== 'all', fn ($q) => $q->where('is_active', $f['status'] === 'active'))
             ->when($request->boolean('featured'), fn ($q) => $q->where('is_featured', true));
         if ($request->boolean('low_stock')) {
-            $default = (string) app(\App\Modules\Inventory\Contracts\InventoryRecords::class)->defaultLowStockThreshold()->toDecimalString();
+            $default = (string) app(InventoryRecords::class)->defaultLowStockThreshold()->toDecimalString();
             $query->whereExists(fn ($e) => $e->from('product_variants as lv')->join('inventory as li', 'li.variant_id', '=', 'lv.id')
                 ->whereColumn('lv.product_id', 'products.id')->whereNull('lv.deleted_at')->where('lv.is_active', true)
                 ->whereRaw('(li.on_hand - li.reserved) <= coalesce(li.low_stock_threshold, ?)', [$default]));

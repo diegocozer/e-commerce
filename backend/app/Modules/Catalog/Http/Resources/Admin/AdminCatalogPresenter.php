@@ -14,7 +14,9 @@ use App\Modules\Catalog\Support\CategoryTree;
 use App\Modules\Catalog\Support\ImageUrls;
 use App\Modules\Inventory\Contracts\InventoryRecords;
 use App\Shared\Domain\Quantity;
+use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +26,7 @@ final class AdminCatalogPresenter
 {
     public static function ts(?DateTimeInterface $d): ?string
     {
-        return $d === null ? null : \Carbon\CarbonImmutable::instance($d)->utc()->format('Y-m-d\TH:i:s\Z');
+        return $d === null ? null : CarbonImmutable::instance($d)->utc()->format('Y-m-d\TH:i:s\Z');
     }
 
     public static function disk(): string
@@ -263,7 +265,7 @@ final class AdminCatalogPresenter
     /**
      * Laravel paginator → API.md Paginated<T> with mapped data.
      *
-     * @param  \Illuminate\Pagination\LengthAwarePaginator<int, mixed>  $paginator
+     * @param  LengthAwarePaginator<int, mixed>  $paginator
      * @param  list<mixed>  $data
      * @return array<string, mixed>
      */

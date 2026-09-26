@@ -6,6 +6,7 @@ namespace App\Modules\Catalog\Contracts;
 
 use App\Modules\Catalog\DTOs\VariantData;
 use App\Modules\Pricing\DTOs\PricingSubject;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 /** Read side of the catalog for other modules (IMPLEMENTATION_PLAN.md §5.1). */
 interface CatalogQuery
@@ -22,7 +23,7 @@ interface CatalogQuery
     /** null when the variant does not belong to the product (404). */
     public function variantBySlug(string $productSlug, int $variantId): ?VariantData;
 
-    /** @throws \Illuminate\Database\Eloquent\ModelNotFoundException */
+    /** @throws ModelNotFoundException */
     public function pricingSubject(int $variantId): PricingSubject;
 
     /**

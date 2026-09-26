@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Cart\Contracts;
 
 use App\Modules\Cart\DTOs\CartSnapshot;
+use App\Modules\Cart\Models\CartItem;
+use App\Modules\Catalog\DTOs\VariantData;
 use App\Modules\Customers\DTOs\CartMergeReport;
 use App\Modules\Pricing\DTOs\CouponContext;
 use App\Modules\Shipping\DTOs\CartLineLogisticsInput;
@@ -61,8 +63,8 @@ interface CartService
      * sellability and stock (largest valid quantity when stock is short).
      *
      * @param  list<array{variant_id: int, quantity?: Quantity|null, width_mm?: int|null, height_mm?: int|null, pieces?: int|null}>  $lines
-     * @return array{cart_id: int, results: list<array{result: string, added: \App\Modules\Cart\Models\CartItem|null, variant: \App\Modules\Catalog\DTOs\VariantData|null, message: string|null}>}
-     *                                                                                                                                                                                                         result ∈ added|adjusted|unavailable|invalid_rules; `added` = the quantity actually added
+     * @return array{cart_id: int, results: list<array{result: string, added: CartItem|null, variant: VariantData|null, message: string|null}>}
+     *                                                                                                                                          result ∈ added|adjusted|unavailable|invalid_rules; `added` = the quantity actually added
      */
     public function addReorderLines(int $customerId, array $lines): array;
 

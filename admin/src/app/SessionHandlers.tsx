@@ -14,7 +14,9 @@ export function SessionHandlers() {
   const qc = useQueryClient();
   const location = useLocation();
   const here = useRef('/');
-  here.current = `${location.pathname}${location.search}`;
+  useEffect(() => {
+    here.current = `${location.pathname}${location.search}`;
+  }, [location.pathname, location.search]);
   useEffect(() => {
     setUnauthorizedHandler(() => {
       const current = here.current;

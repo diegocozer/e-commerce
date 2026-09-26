@@ -7,6 +7,7 @@ namespace App\Modules\Catalog\Http\Requests\Admin;
 use App\Modules\Catalog\Support\SlugRules;
 use App\Shared\Domain\SaleUnit;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /** Body of POST/PATCH /admin/products (API.md §3.G.5). Cross-field unit rules live in SaveProduct. */
@@ -91,7 +92,7 @@ final class ProductRequest extends FormRequest
             'variants.*.sku' => ['required', 'string', 'regex:/^[A-Z0-9-]{3,40}$/', 'distinct',
                 // RN-CAT-013: SKUs of deleted variants cannot be reused (unique including trashed).
                 function (string $attribute, mixed $value, \Closure $fail) use ($variantIds): void {
-                    $exists = \Illuminate\Support\Facades\DB::table('product_variants')->where('sku', $value)
+                    $exists = DB::table('product_variants')->where('sku', $value)
                         ->when($variantIds !== [], fn ($q) => $q->whereNotIn('id', $variantIds))->exists();
                     if ($exists) {
                         $fail('Este SKU já está em uso.');

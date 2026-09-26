@@ -12,6 +12,7 @@ use App\Modules\Pricing\Models\PriceTier;
 use App\Modules\Pricing\Models\Promotion;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -157,7 +158,7 @@ final class PricingPresenter
     }
 
     /**
-     * @param  \Illuminate\Pagination\LengthAwarePaginator<int, mixed>  $paginator
+     * @param  LengthAwarePaginator<int, mixed>  $paginator
      * @param  list<mixed>  $data
      * @return array<string, mixed>
      */

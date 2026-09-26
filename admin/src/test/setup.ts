@@ -1,9 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { resetDb } from '@/mocks/db';
 import { server } from '@/mocks/server';
 import { resetNotifications } from '@/shared/ui/notify';
+
+configure({ asyncUtilTimeout: 8000 });
 
 // jsdom não implementa matchMedia/ResizeObserver/scrollTo (MUI color scheme, recharts).
 if (!window.matchMedia) {

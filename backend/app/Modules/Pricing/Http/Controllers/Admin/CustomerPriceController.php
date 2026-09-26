@@ -7,6 +7,7 @@ namespace App\Modules\Pricing\Http\Controllers\Admin;
 use App\Modules\Pricing\Http\Resources\PricingPresenter as P;
 use App\Modules\Pricing\Models\CustomerPrice;
 use App\Modules\Pricing\Support\RecordsAudit;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ final class CustomerPriceController
             $query->when(isset($f[$k]), fn ($q) => $q->where($k, $f[$k]));
         }
         if (isset($f['active_at'])) {
-            $at = \Carbon\CarbonImmutable::parse($f['active_at']);
+            $at = CarbonImmutable::parse($f['active_at']);
             $query->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', $at))
                 ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', $at));
         }
@@ -67,7 +68,7 @@ final class CustomerPriceController
         ]);
         $starts = array_key_exists('starts_at', $data) ? $data['starts_at'] : $cp->starts_at;
         $ends = array_key_exists('ends_at', $data) ? $data['ends_at'] : $cp->ends_at;
-        if ($starts !== null && $ends !== null && \Carbon\CarbonImmutable::parse($ends) <= \Carbon\CarbonImmutable::parse($starts)) {
+        if ($starts !== null && $ends !== null && CarbonImmutable::parse($ends) <= CarbonImmutable::parse($starts)) {
             throw ValidationException::withMessages(['ends_at' => ['O fim da vigência deve ser posterior ao início.']]);
         }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Pricing\Exceptions;
 
 use App\Shared\Exceptions\DomainException;
+use Carbon\CarbonImmutable;
 
 /** 409 resource_in_use / stale_resource for pricing admin endpoints (API.md §1.6). */
 final class PricingConflict extends DomainException
@@ -22,8 +23,8 @@ final class PricingConflict extends DomainException
         if ($expected === null || $current === null) {
             return;
         }
-        $cur = \Carbon\CarbonImmutable::instance($current)->utc();
-        if (\Carbon\CarbonImmutable::parse($expected)->utc()->format('Y-m-d H:i:s') !== $cur->format('Y-m-d H:i:s')) {
+        $cur = CarbonImmutable::instance($current)->utc();
+        if (CarbonImmutable::parse($expected)->utc()->format('Y-m-d H:i:s') !== $cur->format('Y-m-d H:i:s')) {
             throw new self('Este registro foi alterado por outra pessoa. Recarregue e tente novamente.', 'stale_resource',
                 details: ['current_updated_at' => $cur->format('Y-m-d\TH:i:s\Z')]);
         }
