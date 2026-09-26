@@ -7,12 +7,14 @@ namespace App\Modules\Cart\Http\Controllers\Store;
 use App\Modules\Cart\Actions\AcknowledgeCartPrices;
 use App\Modules\Cart\Actions\AddCartItem;
 use App\Modules\Cart\Actions\ApplyCartCoupon;
+use App\Modules\Cart\Actions\EstimateProductShipping;
 use App\Modules\Cart\Actions\QuoteCartShipping;
 use App\Modules\Cart\Actions\RemoveCartItem;
 use App\Modules\Cart\Actions\UpdateCartItem;
 use App\Modules\Cart\Http\Requests\Store\AddCartItemRequest;
 use App\Modules\Cart\Http\Requests\Store\ApplyCouponRequest;
 use App\Modules\Cart\Http\Requests\Store\CartShippingQuoteRequest;
+use App\Modules\Cart\Http\Requests\Store\ProductShippingEstimateRequest;
 use App\Modules\Cart\Http\Requests\Store\ShowCartRequest;
 use App\Modules\Cart\Http\Requests\Store\UpdateCartItemRequest;
 use App\Modules\Cart\Models\Cart;
@@ -86,6 +88,13 @@ final class CartController
             $request->validated('postal_code'), $request->validated('address_uuid'));
 
         return $this->noStore(new JsonResponse(['data' => $quote->toArray()]));
+    }
+
+    public function estimate(ProductShippingEstimateRequest $request, EstimateProductShipping $action): JsonResponse
+    {
+        $quote = $action->execute($this->customerId(), (string) $request->validated('postal_code'), (array) $request->validated('items'));
+
+        return new JsonResponse(['data' => $quote->toArray()]);
     }
 
     public function acknowledgePrices(Request $request, AcknowledgeCartPrices $action): JsonResponse

@@ -9,9 +9,27 @@ use App\Shared\PostalCode\PostalCodeLookup;
 use App\Shared\PostalCode\PostalCodeLookupException;
 use App\Shared\PostalCode\PostalCodeNotFoundException;
 
-/** In-memory lookup (driver `fake`, default in testing). Seeded with Vale do Itajaí/SC and SP CEPs. */
+/**
+ * In-memory lookup (driver `fake`, default in testing/dev without network).
+ * Exact entries first; otherwise any CEP inside a known city range resolves to
+ * that city (covers every seeded address, e.g. Blumenau 89000000–89099999).
+ * CEPs outside all ranges are "not found".
+ */
 final class FakePostalCodeLookup implements PostalCodeLookup
 {
+    /** @var list<array{0: string, 1: string, 2: string, 3: string, 4: string}> [start, end, city, UF, IBGE] */
+    public const array CITY_RANGES = [
+        ['89000000', '89099999', 'Blumenau', 'SC', '4202404'],
+        ['89100000', '89109999', 'Pomerode', 'SC', '4213203'],
+        ['89110000', '89119999', 'Gaspar', 'SC', '4205902'],
+        ['89130000', '89139999', 'Indaial', 'SC', '4207502'],
+        ['89200000', '89239999', 'Joinville', 'SC', '4209102'],
+        ['88000000', '88099999', 'Florianópolis', 'SC', '4205407'],
+        ['80000000', '82999999', 'Curitiba', 'PR', '4106902'],
+        ['01000000', '05999999', 'São Paulo', 'SP', '3550308'],
+        ['08000000', '08499999', 'São Paulo', 'SP', '3550308'],
+    ];
+
     /** @var array<string, PostalCodeInfo> */
     private array $map = [];
 
@@ -78,10 +96,18 @@ final class FakePostalCodeLookup implements PostalCodeLookup
         if ($this->failAll || isset($this->failing[$postalCode])) {
             throw new PostalCodeLookupException('timeout');
         }
-        if (isset($this->notFound[$postalCode]) || ! isset($this->map[$postalCode])) {
+        if (isset($this->notFound[$postalCode])) {
             throw new PostalCodeNotFoundException('not_found');
         }
+        if (isset($this->map[$postalCode])) {
+            return $this->map[$postalCode];
+        }
+        foreach (self::CITY_RANGES as [$start, $end, $city, $uf, $ibge]) {
+            if (strcmp($start, $postalCode) <= 0 && strcmp($postalCode, $end) <= 0) {
+                return new PostalCodeInfo($postalCode, null, null, $city, $uf, $ibge);
+            }
+        }
 
-        return $this->map[$postalCode];
+        throw new PostalCodeNotFoundException('not_found');
     }
 }

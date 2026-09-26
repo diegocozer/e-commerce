@@ -37,11 +37,11 @@ final class AdminOrdersApiTest extends OrdersTestCase
 
         $this->actingAsAdmin(['orders.view', 'orders.cancel_paid']);
         // pending order needs orders.cancel_unpaid
-        $r = $this->postJson("/api/v1/admin/orders/{$order->id}/cancel", ["reason" => "teste"]); fwrite(STDERR, $r->getContent()); $r->assertForbidden();
+        $this->postJson("/api/v1/admin/orders/{$order->id}/cancel", ['reason' => 'teste'])->assertForbidden();
         $this->patchJson("/api/v1/admin/orders/{$order->id}", ['internal_notes' => 'x'])->assertForbidden();
 
         $this->actingAsAdmin([], AdminRole::Seller);
-        $r = $this->postJson("/api/v1/admin/orders/{$order->id}/cancel", ["reason" => "teste"]); fwrite(STDERR, $r->getContent()); $r->assertOk()->assertJsonPath("data.status", "cancelled");
+        $this->postJson("/api/v1/admin/orders/{$order->id}/cancel", ['reason' => 'teste'])->assertOk()->assertJsonPath('data.status', 'cancelled');
     }
 
     public function test_list_filters_detail_and_status_counts(): void

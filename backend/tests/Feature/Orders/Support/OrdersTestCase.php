@@ -155,6 +155,9 @@ abstract class OrdersTestCase extends TestCase
             $admin->assignRole($custom);
         }
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+        // New actor = new session (Sanctum AuthenticateSession keeps the previous password hash).
+        $this->app['auth']->forgetGuards();
+        $this->app['session']->flush();
         $this->actingAs($admin->refresh(), 'admin');
 
         return $admin;

@@ -23,3 +23,7 @@ Route::prefix('cart')->name('cart.')->controller(CartController::class)->group(f
     Route::put('coupon', 'applyCoupon')->middleware('throttle:coupon')->name('coupon.update');
     Route::post('shipping-quote', 'shippingQuote')->middleware('throttle:shipping-quote')->name('shipping-quote');
 });
+
+// Product-page estimate (API.md §3.A) — not persisted, no cart involved.
+Route::post('shipping/quote', [CartController::class, 'estimate'])
+    ->middleware('throttle:shipping-estimate')->name('store.shipping.estimate');

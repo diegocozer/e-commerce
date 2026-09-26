@@ -9,6 +9,7 @@ use App\Modules\Customers\DTOs\CartMergeReport;
 use App\Modules\Pricing\DTOs\CouponContext;
 use App\Modules\Shipping\DTOs\CartLineLogisticsInput;
 use App\Shared\Domain\Money;
+use App\Shared\Domain\Quantity;
 
 /**
  * Cart facade (ARCHITECTURE.md §2.4 Cart). Consumed by Checkout and by the
@@ -34,6 +35,16 @@ interface CartService
      * @return list<CartLineLogisticsInput>
      */
     public function toShippingLines(CartSnapshot $cart): array;
+
+    /**
+     * Logistics lines for arbitrary item configurations (product estimate, admin
+     * simulator in order mode): quantities resolved by Catalog, current prices.
+     * Unavailable/invalid items are skipped.
+     *
+     * @param  list<array{variant_id: int, quantity?: Quantity|null, width_mm?: int|null, height_mm?: int|null, pieces?: int|null}>  $items
+     * @return array{lines: list<CartLineLogisticsInput>, subtotal: Money}
+     */
+    public function shippingLinesForItems(array $items, ?int $customerId = null): array;
 
     /**
      * Canonical item configurations for the shipping QuoteHasher (SHIPPING.md §4.9).

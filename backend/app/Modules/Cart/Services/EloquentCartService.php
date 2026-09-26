@@ -113,6 +113,24 @@ final class EloquentCartService implements CartService, GuestCartMerger
         return $packages;
     }
 
+    public function shippingLinesForItems(array $items, ?int $customerId = null): array
+    {
+        $models = [];
+        foreach ($items as $i => $data) {
+            $item = new CartItem;
+            $item->id = $i + 1;
+            $item->variant_id = (int) $data['variant_id'];
+            $item->quantity = $data['quantity'] ?? null;
+            $item->width_mm = $data['width_mm'] ?? null;
+            $item->height_mm = $data['height_mm'] ?? null;
+            $item->pieces = $data['pieces'] ?? null;
+            $models[] = $item;
+        }
+        $snapshot = $this->calculator->calculate(new Cart, $models, $customerId);
+
+        return ['lines' => $this->toShippingLines($snapshot), 'subtotal' => $snapshot->subtotal];
+    }
+
     public function itemConfigs(CartSnapshot $cart): array
     {
         return array_map(static fn (CartLine $l): array => [
