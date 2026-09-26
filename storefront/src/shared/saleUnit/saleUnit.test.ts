@@ -89,7 +89,9 @@ describe('checkConfiguration + prévia local', () => {
     ];
     expect(computeLocalPreview('LINEAR_METER', c, { unit_price_cents: 1590, tiers }, 250)).toMatchObject({ unitPriceCents: 1590, lineTotalCents: 7950, weightGrams: 1250 });
     const c10 = checkConfiguration(base, draft({ quantity: '10' }));
-    if (c10.ok) expect(computeLocalPreview('LINEAR_METER', c10, { unit_price_cents: 1590, tiers }, 250).lineTotalCents).toBe(14900);
+    expect(c10.ok).toBe(true);
+    const total10 = c10.ok ? computeLocalPreview('LINEAR_METER', c10, { unit_price_cents: 1590, tiers }, 250).lineTotalCents : null;
+    expect(total10).toBe(14900);
   });
   it('LINEAR_METER 5,05 → erro de passo com sugestões', () => {
     const c = checkConfiguration(base, draft({ quantity: '5,05' }));
