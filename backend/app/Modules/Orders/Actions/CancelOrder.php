@@ -56,17 +56,18 @@ final class CancelOrder
         $wasPaid = $from !== OrderStatus::PendingPayment;
         $reservation = $this->reservations->forOrder($order->id);
 
+        // Global lock order: orders → payments → coupons → inventory.
         if ($wasPaid) {
-            $this->inventory->restock($reservation);
             $this->payments->requestRefund($order->id, null, $reason ?? 'Pedido cancelado', $actor);
+            $this->inventory->restock($reservation);
         } else {
             if ($reasonCode === CancelReasonCode::PaymentExpired) {
                 $this->payments->markExpired($order->id);
             } else {
                 $this->payments->cancelPending($order->id);
             }
-            $this->inventory->release($reservation);
             $this->coupons->releaseForOrder($order->id);
+            $this->inventory->release($reservation);
         }
 
         $order->forceFill([

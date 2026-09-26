@@ -4,18 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Customers;
 
+use App\Modules\Identity\Enums\AdminRole;
 use Tests\Feature\Identity\Support\ApiTestCase;
 
 final class SmokeTest extends ApiTestCase
 {
-    public function test_register_and_me(): void
+    public function test_admin(): void
     {
-        $r = $this->postJson('/api/v1/auth/register', [
-            'type' => 'individual', 'name' => 'João da Silva', 'cpf' => '529.982.247-25', 'email' => 'Joao@Example.com',
-            'phone' => '(47) 99999-0001', 'password' => 'segredo123', 'password_confirmation' => 'segredo123',
-            'accept_terms' => true, 'terms_version' => '2026-01',
-        ]);
-        $r->dump();
-        $this->getJson('/api/v1/me')->dump();
+        $a = $this->admin([], AdminRole::SuperAdmin, ['email' => 'root@example.com']);
+        $this->postJson('/api/v1/admin/auth/login', ['email' => 'root@example.com', 'password' => 'password'])->dump();
+        $this->getJson('/api/v1/admin/roles')->dump();
+        $this->postJson('/api/v1/admin/users', ['name' => 'Novo Adm', 'email' => 'n@example.com', 'roles' => ['seller']])->dump();
     }
 }

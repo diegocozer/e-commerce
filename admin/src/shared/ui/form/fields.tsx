@@ -24,7 +24,7 @@ interface Base<T extends FieldValues> {
 
 type TextExtra = Pick<TextFieldProps, 'type' | 'multiline' | 'minRows' | 'maxRows' | 'placeholder' | 'autoComplete' | 'autoFocus' | 'slotProps'>;
 
-export function RHFTextField<T extends FieldValues>({ control, name, label, required, disabled, helperText, maxLength, onValueChange, ...rest }: Base<T> & TextExtra & { maxLength?: number; onValueChange?: (v: string) => void }) {
+export function RHFTextField<T extends FieldValues>({ control, name, label, required, disabled, helperText, maxLength, onValueChange, onBlurExtra, ...rest }: Base<T> & TextExtra & { maxLength?: number; onValueChange?: (v: string) => void; onBlurExtra?: () => void }) {
   return (
     <Controller
       control={control}
@@ -41,7 +41,10 @@ export function RHFTextField<T extends FieldValues>({ control, name, label, requ
               field.onChange(e.target.value);
               onValueChange?.(e.target.value);
             }}
-            onBlur={field.onBlur}
+            onBlur={() => {
+              field.onBlur();
+              onBlurExtra?.();
+            }}
             inputRef={field.ref}
             label={label}
             required={required}

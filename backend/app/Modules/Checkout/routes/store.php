@@ -2,9 +2,15 @@
 
 /*
 |--------------------------------------------------------------------------
-| Checkout — POST /checkout and /checkout/preview (API.md §1.1)
+| Checkout — POST /checkout and /checkout/preview (API.md §3.E)
 |--------------------------------------------------------------------------
-| Prefix: /api/v1 · no automatic name prefix: name routes checkout.*
-| middleware: api. Add auth:customer and throttle:checkout / throttle:customer per route.
-| Loaded automatically by App\Shared\Providers\ModuleServiceProvider.
+| Prefix: /api/v1 · middleware: api + auth:customer.
 */
+
+use App\Modules\Checkout\Http\Controllers\Store\CheckoutController;
+use Illuminate\Support\Facades\Route;
+
+Route::prefix('checkout')->name('checkout.')->middleware('auth:customer')->controller(CheckoutController::class)->group(function (): void {
+    Route::post('preview', 'preview')->middleware('throttle:customer')->name('preview');
+    Route::post('/', 'store')->middleware('throttle:checkout')->name('store');
+});

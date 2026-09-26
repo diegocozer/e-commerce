@@ -2,9 +2,14 @@
 
 /*
 |--------------------------------------------------------------------------
-| Settings — admin panel
+| Settings — admin panel (API.md §3.G.13)
 |--------------------------------------------------------------------------
-| Prefix: /api/v1/admin · route names: "admin.*"
-| middleware: api, auth:admin, admin.fresh, throttle:admin. Every route must declare a permission (permission:<name>,admin or ->can()).
-| Loaded automatically by App\Shared\Providers\ModuleServiceProvider.
 */
+
+use App\Modules\Settings\Http\Controllers\Admin\SettingController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware('permission:settings.manage,admin')->group(function (): void {
+    Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
+    Route::patch('settings', [SettingController::class, 'update'])->name('settings.update');
+});

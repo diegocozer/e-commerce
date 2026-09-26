@@ -2,9 +2,13 @@
 
 /*
 |--------------------------------------------------------------------------
-| Settings — public storefront API
+| Settings — public storefront API (API.md §3.A)
 |--------------------------------------------------------------------------
-| Prefix: /api/v1 · no automatic name prefix
-| middleware: api. Name routes explicitly (store.*, cart.*, auth.*, checkout.*) and add throttle:<limiter> / auth:customer per route (API.md §1.1).
-| Loaded automatically by App\Shared\Providers\ModuleServiceProvider.
 */
+
+use App\Modules\Settings\Http\Controllers\Store\PageController;
+use App\Modules\Settings\Http\Controllers\Store\PublicSettingsController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('settings/public', [PublicSettingsController::class, 'show'])->middleware('throttle:catalog')->name('store.settings.public');
+Route::get('pages/{slug}', [PageController::class, 'show'])->middleware('throttle:catalog')->name('store.pages.show');

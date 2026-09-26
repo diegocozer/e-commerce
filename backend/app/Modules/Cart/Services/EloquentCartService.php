@@ -59,23 +59,21 @@ final class EloquentCartService implements CartService, GuestCartMerger
             if ($v === null || $b === null || $line->price === null) {
                 continue;
             }
+            $area = $v->saleUnit === SaleUnit::SquareMeter;
             $lines[] = new CartLineLogisticsInput(
                 variantId: $v->id,
                 saleUnit: $v->saleUnit,
-                billableQuantityMilli: $b->billable->milli(),
-                widthMm: $v->saleUnit === SaleUnit::SquareMeter ? ($b->widthMm ?? $line->input->widthMm) : null,
-                heightMm: $v->saleUnit === SaleUnit::SquareMeter ? ($b->heightMm ?? $line->input->heightMm) : null,
-                pieces: $v->saleUnit === SaleUnit::SquareMeter ? ($b->pieces ?? $line->input->pieces) : null,
-                fixedWidthMm: $v->fixedWidthMm,
+                billable: $b->billable,
+                widthMm: $area ? ($b->widthMm ?? $line->input->widthMm) : null,
+                heightMm: $area ? ($b->heightMm ?? $line->input->heightMm) : null,
+                pieces: $area ? ($b->pieces ?? $line->input->pieces) : null,
                 weightGrams: $v->weightGrams,
-                packageLengthMm: $v->package?->lengthMm,
-                packageWidthMm: $v->package?->widthMm,
-                packageHeightMm: $v->package?->heightMm,
+                package: $v->package,
                 unitsPerPackage: $v->unitsPerPackage,
+                fixedWidthMm: $v->fixedWidthMm,
                 pickupOnly: $v->pickupOnly,
-                lineTotalCents: $line->price->lineTotal->cents(),
                 sku: $v->sku,
-                quantityMilli: $line->input->quantity?->milli(),
+                lineTotalCents: $line->price->lineTotal->cents(),
             );
         }
 

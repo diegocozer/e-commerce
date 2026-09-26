@@ -136,7 +136,7 @@ export const catalogHandlers = [
     return ok({ succeeded: b.ids, failed: [] });
   }),
   http.post(`${B}/admin/products`, async ({ request }) => {
-    const b = (await request.json()) as Partial<AdminProduct> & { variants: (Partial<AdminVariant> & { initial_stock?: number })[] };
+    const b = (await request.json()) as Omit<Partial<AdminProduct>, 'variants'> & { variants: (Partial<AdminVariant> & { initial_stock?: number })[] };
     if (!b.name || b.name.length < 3) return invalid({ name: ['O nome deve ter entre 3 e 150 caracteres.'] });
     const errs: Record<string, string[]> = {};
     b.variants?.forEach((v, i) => {
@@ -159,7 +159,7 @@ export const catalogHandlers = [
   http.patch(`${B}/admin/products/:id`, async ({ params, request }) => {
     const p = db.products.find((x) => x.id === Number(params.id));
     if (!p) return notFound();
-    const b = (await request.json()) as Partial<AdminProduct> & { variants?: (Partial<AdminVariant> & { initial_stock?: number })[]; expected_updated_at?: string };
+    const b = (await request.json()) as Omit<Partial<AdminProduct>, 'variants'> & { variants?: (Partial<AdminVariant> & { initial_stock?: number })[]; expected_updated_at?: string };
     if (b.expected_updated_at && b.expected_updated_at !== p.updated_at) return conflict('stale_resource', 'Este registro foi alterado por outra pessoa.', { current_updated_at: p.updated_at });
     if (b.sale_unit && b.sale_unit !== p.sale_unit && p.sale_unit_locked) return invalid({ sale_unit: ['A unidade de venda não pode ser alterada: já existem pedidos com este produto.'] });
     const { variants, expected_updated_at: _e, ...rest } = b;

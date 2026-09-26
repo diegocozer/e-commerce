@@ -2,9 +2,16 @@
 
 /*
 |--------------------------------------------------------------------------
-| Audit — admin panel
+| Audit — admin panel (API.md §3.G.14), read-only
 |--------------------------------------------------------------------------
-| Prefix: /api/v1/admin · route names: "admin.*"
-| middleware: api, auth:admin, admin.fresh, throttle:admin. Every route must declare a permission (permission:<name>,admin or ->can()).
-| Loaded automatically by App\Shared\Providers\ModuleServiceProvider.
 */
+
+use App\Modules\Audit\Http\Controllers\Admin\AuditLogController;
+use App\Modules\Audit\Http\Controllers\Admin\FailedJobController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware('permission:audit_logs.view,admin')->group(function (): void {
+    Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+    Route::get('audit-logs/{auditLog}', [AuditLogController::class, 'show'])->whereNumber('auditLog')->name('audit-logs.show');
+    Route::get('failed-jobs', [FailedJobController::class, 'index'])->name('failed-jobs.index');
+});

@@ -15,6 +15,9 @@ use App\Modules\Catalog\Services\EloquentCatalogQuery;
 use App\Modules\Catalog\Services\PostgresProductSearch;
 use App\Modules\Inventory\Contracts\VariantLabelProvider;
 use App\Shared\Providers\ModuleServiceProvider;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 
 final class CatalogServiceProvider extends ModuleServiceProvider
 {
@@ -33,4 +36,14 @@ final class CatalogServiceProvider extends ModuleServiceProvider
 
     /** @var array<class-string, class-string> */
     protected array $policies = [];
+
+    public function boot(): void
+    {
+        parent::boot();
+
+        // GET /products uses `search` limits when q is present, else `catalog` (API.md §1.8).
+        RateLimiter::for('catalog-products', static fn (Request $r) => $r->filled('q')
+            ? Limit::perMinute(60)->by('search:'.$r->ip())
+            : Limit::perMinute(120)->by('catalog:'.$r->ip()));
+    }
 }
