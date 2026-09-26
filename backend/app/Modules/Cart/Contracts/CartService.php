@@ -55,6 +55,17 @@ interface CartService
 
     public function toCouponContext(CartSnapshot $cart, ?Money $shipping): CouponContext;
 
+    /**
+     * "Comprar novamente" (RN-PED-040…045): adds order lines to the customer's active
+     * cart (created when missing), summing by line identity, with the CURRENT rules,
+     * sellability and stock (largest valid quantity when stock is short).
+     *
+     * @param  list<array{variant_id: int, quantity?: Quantity|null, width_mm?: int|null, height_mm?: int|null, pieces?: int|null}>  $lines
+     * @return array{cart_id: int, results: list<array{result: string, added: \App\Modules\Cart\Models\CartItem|null, variant: \App\Modules\Catalog\DTOs\VariantData|null, message: string|null}>}
+     *                                                                                                                                                                                                         result ∈ added|adjusted|unavailable|invalid_rules; `added` = the quantity actually added
+     */
+    public function addReorderLines(int $customerId, array $lines): array;
+
     /** Marks the cart converted (checkout transaction). */
     public function markConverted(int $cartId, int $orderId): void;
 

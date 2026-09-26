@@ -113,6 +113,18 @@ final class CartView implements CartPresenter
     /** @var array<int, array{status: string, available_quantity: int|float|null}> per variant of the cart being built */
     private array $availability = [];
 
+    public function cart(int $cartId, ?int $customerId): array
+    {
+        return $this->build(Cart::query()->findOrFail($cartId), $customerId);
+    }
+
+    public function configurationOf(?Quantity $quantity, ?int $widthMm, ?int $heightMm, ?int $pieces): array
+    {
+        $m = static fn (?int $mm): int|float|null => $mm !== null ? Quantity::fromMilli($mm)->toNumber() : null;
+
+        return ['quantity' => $quantity?->toNumber(), 'width_m' => $m($widthMm), 'height_m' => $m($heightMm), 'pieces' => $pieces];
+    }
+
     public function evaluateCoupon(CartSnapshot $snapshot): ?CouponEvaluation
     {
         if ($snapshot->couponCode === null) {

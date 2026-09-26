@@ -329,6 +329,99 @@ final class EloquentCartService implements CartService, GuestCartMerger
         }
     }
 
+    public function addReorderLines(int $customerId, array $lines): array
+    {
+        return DB::transaction(function () use ($customerId, $lines): array {
+            [$cart] = $this->carts->findOrCreate($customerId, null);
+            $ids = array_values(array_unique(array_map(static fn (array $l): int => (int) $l['variant_id'], $lines)));
+            $variants = $ids === [] ? [] : $this->catalog->variants($ids);
+            $results = [];
+            foreach ($lines as $data) {
+                $results[] = $this->reorderLine($cart, $data, $variants[(int) $data['variant_id']] ?? null);
+            }
+            $this->carts->touch($cart);
+
+            return ['cart_id' => (int) $cart->id, 'results' => $results];
+        });
+    }
+
+    /**
+     * RN-PED-040…044 for one order line.
+     *
+     * @param  array{variant_id: int, quantity?: Quantity|null, width_mm?: int|null, height_mm?: int|null, pieces?: int|null}  $data
+     * @return array{result: string, added: CartItem|null, variant: VariantData|null, message: string|null}
+     */
+    private function reorderLine(Cart $cart, array $data, ?VariantData $variant): array
+    {
+        if ($variant === null || ! $variant->isSellable()) {
+            return ['result' => 'unavailable', 'added' => null, 'variant' => $variant, 'message' => null];
+        }
+        $isArea = $variant->saleUnit === SaleUnit::SquareMeter;
+        $item = new CartItem;
+        $item->variant_id = $variant->id;
+        $item->quantity = $isArea ? null : ($data['quantity'] ?? null);
+        $item->width_mm = $isArea ? ($data['width_mm'] ?? $variant->fixedWidthMm) : null;
+        $item->height_mm = $isArea ? ($data['height_mm'] ?? null) : null;
+        $item->pieces = $isArea ? (int) ($data['pieces'] ?? 1) : null;
+
+        try {
+            $this->quantities->resolve($variant, CartCalculator::inputOf($item));
+        } catch (InvalidSaleQuantity $e) {
+            return ['result' => 'invalid_rules', 'added' => null, 'variant' => $variant, 'message' => $e->message()];
+        }
+
+        /** @var CartItem|null $existing */
+        $existing = $cart->items()->where('variant_id', $variant->id)
+            ->where(fn ($q) => $item->width_mm === null ? $q->whereNull('width_mm') : $q->where('width_mm', $item->width_mm))
+            ->where(fn ($q) => $item->height_mm === null ? $q->whereNull('height_mm') : $q->where('height_mm', $item->height_mm))
+            ->lockForUpdate()->first();
+        if ($existing === null && $cart->items()->count() >= CartItemGuard::MAX_LINES) {
+            return ['result' => 'unavailable', 'added' => null, 'variant' => $variant,
+                'message' => 'Seu carrinho atingiu o limite de '.CartItemGuard::MAX_LINES.' itens.'];
+        }
+
+        $unitsOf = static fn (CartItem $i): Quantity => $isArea ? Quantity::ofUnits((int) $i->pieces) : $i->quantity;
+        $requested = $unitsOf($item);
+        $already = $existing !== null ? $unitsOf($existing) : Quantity::zero();
+        $line = $existing ?? $item;
+
+        // room left in the stock by the variant total (other lines stay as they are)
+        $others = Quantity::zero();
+        foreach ($cart->items()->where('variant_id', $variant->id)->get() as $other) {
+            if ($existing === null || $other->id !== $existing->id) {
+                $others = $others->add($this->resolveStock($variant, $other) ?? Quantity::zero());
+            }
+        }
+        $available = $this->inventory->availability([$variant->id])[$variant->id] ?? Quantity::zero();
+
+        $wanted = $already->add($requested);
+        $result = 'added';
+        $fitsRules = $this->isValid($variant, $line, $wanted);
+        $stock = $fitsRules ? $this->resolveStock($variant, $this->withUnits($line->replicate(), $wanted, $isArea)) : null;
+        if (! $fitsRules || $stock === null || $others->add($stock)->greaterThan($available)) {
+            $clamped = $fitsRules ? $wanted : $this->clampToRules($variant, $wanted);
+            $fit = $this->fitToStock($variant, $line, $available->subtract($others), $isArea);
+            $best = $clamped === null ? $fit : ($fit === null ? null : Quantity::min($clamped, $fit));
+            if ($best === null || ! $best->greaterThan($already) || ! $this->isValid($variant, $line, $best)) {
+                return ['result' => 'unavailable', 'added' => null, 'variant' => $variant,
+                    'message' => 'Sem estoque suficiente para '.$variant->productName.'.'];
+            }
+            $wanted = $best;
+            $result = 'adjusted';
+        }
+
+        $this->withUnits($line, $wanted, $isArea);
+        if ($existing === null) {
+            $line->cart_id = $cart->id;
+        }
+        $line->save();
+
+        $added = $item->replicate();
+        $this->withUnits($added, $wanted->subtract($already), $isArea);
+
+        return ['result' => $result, 'added' => $added, 'variant' => $variant, 'message' => null];
+    }
+
     private function withUnits(CartItem $line, Quantity $units, bool $isArea): CartItem
     {
         if ($isArea) {

@@ -431,3 +431,13 @@ MVP. `Settings` é módulo-base e pode ser consumido por `Cart`.
 - Pendências para a revisão: Shipping deve fazer o binding de
   `Settings\Contracts\PickupPointProvider`; anonimização deve limpar carrinhos
   (Cart); alerta de ≥10 logins admin falhos (hoje só log + auditoria).
+
+## ADR-034 — Pontos de integração loja ↔ backend (para a fase de integração)
+
+- `verificar-email` passa a ser slug reservado.
+- 409 `price_changed` no checkout deve retornar um `CheckoutSummary` completo.
+- 422 de checkout: erro de perfil incompleto sob a chave `profile`.
+- Link "Baixar meus dados" (`GET /me/data-export`) está fora do MVP (ADR-026):
+  a loja deve ocultá-lo até existir o endpoint.
+- Quantidades trafegam como números JSON; a loja nunca arredonda quantidade
+  inválida — mostra sugestões ("Usar X").
