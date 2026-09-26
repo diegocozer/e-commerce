@@ -20,6 +20,7 @@ Recharts · Vitest + Testing Library + MSW 2 · oxlint.
 | `npm run typecheck` | `tsc -b --noEmit` |
 | `npm test` | `vitest run` (jsdom + MSW em Node) |
 | `npm run build` | Typecheck + build de produção em `dist/` (base `/admin/`, code-split por rota) |
+| `npm run e2e` | Playwright contra o backend **real** (ver "E2E" abaixo) |
 
 ## Variáveis de ambiente (`.env.local`, ver `.env.example`)
 
@@ -95,14 +96,41 @@ src/
 409); validação de regra de frete; ajuste/entrada de estoque exigindo motivo; login (422/403/redirect);
 formulário de produto com campos condicionais por unidade e mapeamento de 422.
 
-## Pontos do contrato interpretados (alinhar com o backend)
+### E2E (`e2e/`, Playwright contra a API real)
+
+Pré-requisitos no backend: banco semeado (`php artisan migrate:fresh --seed`), `APP_ENV=local`,
+`PAYMENTS_DRIVER=sandbox` (rota `/api/v1/dev/payments/{uuid}/approve`) e `SHIPPING_POSTAL_LOOKUP=fake`
+sem acesso ao ViaCEP. Servidores já em execução são reaproveitados; senão o Playwright sobe
+`php artisan serve --no-reload` (o `--no-reload` é necessário para respeitar `DB_DATABASE` do ambiente)
+e o Vite do painel com `VITE_API_PROXY_TARGET`.
+
+```bash
+# backend em :8001 com banco próprio, painel em :5174
+DB_DATABASE=ecommerce_admin_dev php artisan serve --port=8001 --no-reload   # em backend/
+E2E_DB_DATABASE=ecommerce_admin_dev npm run e2e                               # em admin/
+```
+
+Variáveis: `E2E_BASE_URL` (padrão `http://localhost:5174`), `E2E_API_URL` (padrão `http://localhost:8001`),
+`E2E_DB_DATABASE` (banco usado por `php artisan queue:work`/`tinker` chamados pelos testes; padrão o `.env`),
+`E2E_CHROMIUM_PATH` (binário do Chromium, opcional). O webhook do sandbox é processado por job
+(fila `webhooks`): os testes rodam `queue:work --stop-when-empty` após aprovar o PIX.
+
+Cenários: login (e senha errada) · dashboard com KPIs · produto `LINEAR_METER` com variante e estoque
+inicial → edição de preço → lista · estoque (entrada e ajuste com motivo obrigatório, histórico) ·
+frete (zona com faixa de CEP, regra `table_rate`, simulador com opções e trace) · pedido criado pela API da
+loja (cliente, carrinho com vinil 5 m, cotação, checkout com `Idempotency-Key`, aprovação sandbox) →
+separação → envio com rastreio → entrega, com linha do tempo · permissões (vendedor convidado: menu
+restrito, ações ocultas, página 403 e 403 da API) · relatório de vendas + CSV · smoke de todas as telas
+sem respostas 4xx/5xx. A sessão do super-admin é criada uma vez (`auth.setup.ts`, rate limit de login).
+
+## Pontos do contrato interpretados (verificados contra o backend real)
 
 1. Sessão lida em `GET /admin/me` (API.md §3.G.1), não `/admin/auth/me`.
 2. 422 do login ("E-mail ou senha inválidos.") esperado em `errors.email`; exibido como alerta geral.
 3. Detalhe de pedido por `id` (`/pedidos/:id`), conforme API §1.1 (ARCHITECTURE §8.2 citava `:number`).
 4. Campos opcionais vazios **não** são enviados em `transitions` (em vez de `null`).
-5. Trace do simulador tipado a partir de SHIPPING §10.1 (`shared/api/extraTypes.ts`); o painel usa
-   `methods[].name` quando presente (sugestão: incluir o nome do método no trace).
+5. Trace do simulador tipado a partir de SHIPPING §10.1 (`shared/api/extraTypes.ts`); o backend inclui
+   `methods[].name` e `rules[].name`, exibidos no trace.
 6. Settings: `PATCH /admin/settings` enviado por grupo, sem `expected_updated_at` (não há um único
    `updated_at` para a coleção).
 7. Faixas de preço enviam apenas `min_quantity` (o "até" exibido é derivado da próxima faixa).

@@ -42,8 +42,10 @@ function CarrierDialog({ carrier, onClose }: { carrier: Carrier | null; onClose:
         }
       }
     }
-    const body: Record<string, unknown> = { name, driver, settings, is_active: active };
+    const body: Record<string, unknown> = { name, settings, is_active: active };
     if (!carrier) body.code = code;
+    // Driver só vai no corpo se mudou: a API recusa drivers não registrados neste ambiente (ex.: correios em dev).
+    if (!carrier || driver !== carrier.driver) body.driver = driver;
     if (changeCreds) body.credentials = credentials;
     try {
       await save.mutateAsync(body);
@@ -60,6 +62,9 @@ function CarrierDialog({ carrier, onClose }: { carrier: Carrier | null; onClose:
       <TextField label="Código" required value={code} disabled={!!carrier} onChange={(e) => setCode(e.target.value)} helperText="Imutável após a criação" />
       <TextField select label="Integração (driver)" required value={driver} onChange={(e) => setDriver(e.target.value)}>
         {drivers.map((d) => <MenuItem key={d.driver} value={d.driver}>{d.name}</MenuItem>)}
+        {carrier && !drivers.some((d) => d.driver === carrier.driver) && (
+          <MenuItem value={carrier.driver}>{carrier.driver} (não registrado neste ambiente)</MenuItem>
+        )}
       </TextField>
       <Typography variant="overline">Configurações</Typography>
       {Object.entries(fields).map(([key, type]) =>

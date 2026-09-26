@@ -30,7 +30,7 @@ function RuleLine({ r }: { r: NonNullable<MethodTrace['rules']>[number] }) {
   return (
     <ListItem dense sx={{ pl: 6 }}>
       <ListItemIcon sx={{ minWidth: 32 }}>{icon}</ListItemIcon>
-      <ListItemText primary={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13 }}>regra #{r.rule_id}{r.priority !== undefined ? ` (prior. ${r.priority})` : ''} — {text}</span>} />
+      <ListItemText primary={<span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13 }}>regra #{r.rule_id}{r.name ? ` ${r.name}` : ''}{r.priority !== undefined ? ` (prior. ${r.priority})` : ''} — {text}</span>} />
     </ListItem>
   );
 }

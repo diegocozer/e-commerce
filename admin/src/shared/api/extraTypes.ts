@@ -53,6 +53,7 @@ export interface ZoneTestResult {
 export type RuleTraceResult = 'matched' | 'rejected' | 'not_evaluated' | 'zone_not_matched' | 'inactive' | string;
 export interface RuleTrace {
   rule_id: number;
+  name?: string;
   priority?: number;
   specificity?: string;
   result: RuleTraceResult;
