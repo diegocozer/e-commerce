@@ -63,7 +63,7 @@ export default function PriceListsPage() {
       align: 'right',
       render: (p) =>
         canManage && (
-          <span onClick={(e) => e.stopPropagation()}>
+          <span>
             <Button size="small" onClick={() => setEditing(p)}>Editar</Button>
             <Button size="small" color="error" onClick={() => remove.ask(p)}>Excluir</Button>
           </span>

@@ -17,8 +17,9 @@ interface Props {
 export function PageHeader({ title, count, subtitle, actions, back, chips }: Props) {
   usePageTitle(title);
   const ref = useRef<HTMLHeadingElement>(null);
+  // Foco no h1 a cada troca de página/título (UX §6.10).
   useEffect(() => {
-    ref.current?.focus({ preventScroll: true });
+    if (title) ref.current?.focus({ preventScroll: true });
   }, [title]);
   return (
     <Box sx={{ mb: 4 }}>

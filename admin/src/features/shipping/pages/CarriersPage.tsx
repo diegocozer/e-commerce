@@ -112,7 +112,7 @@ export default function CarriersPage() {
       header: '',
       align: 'right',
       render: (c) => (
-        <span onClick={(e) => e.stopPropagation()}>
+        <span>
           <Button size="small" disabled={testing === c.id} onClick={() => void runTest(c)}>Testar conexão</Button>
           <Button size="small" color="error" onClick={() => remove.ask(c)}>Excluir</Button>
         </span>

@@ -173,7 +173,7 @@ export function DataTable<T>(props: Props<T>) {
                     key={id}
                     hover
                     selected={isSel}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    onClick={onRowClick ? (e) => !(e.target as HTMLElement).closest('button, a, input, label, [role="button"], [role="checkbox"]') && onRowClick(row) : undefined}
                     sx={{ cursor: onRowClick ? 'pointer' : undefined }}
                   >
                     {selectable && (

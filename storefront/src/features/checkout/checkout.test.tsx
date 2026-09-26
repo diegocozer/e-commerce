@@ -59,7 +59,7 @@ describe('Checkout — revisão e confirmação', () => {
     const user = userEvent.setup();
     const { router } = renderReview();
     expect(await screen.findByRole('heading', { name: 'Revisão do pedido' })).toBeInTheDocument();
-    expect(screen.getByText(/5\sm × R\$\s15,90\s\/m/)).toBeInTheDocument();
+    expect(await screen.findByText(/5\sm × R\$\s15,90\s\/m/)).toBeInTheDocument();
     await confirm(user);
     await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/checkout\/pedido\//));
     expect(captured).toHaveLength(1);

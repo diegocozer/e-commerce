@@ -81,7 +81,7 @@ export default function UsersPage() {
       align: 'right',
       render: (u) =>
         u.id !== me?.user.id && (
-          <span onClick={(e) => e.stopPropagation()}>
+          <span>
             {u.is_active ? <Button size="small" onClick={() => act(u.id, 'deactivate', 'Usuário desativado')}>Desativar</Button> : <Button size="small" onClick={() => act(u.id, 'activate', 'Usuário ativado')}>Ativar</Button>}
             <Button size="small" onClick={() => act(u.id, 'password-reset', 'Link de redefinição enviado')}>Redefinir senha</Button>
             <Button size="small" color="error" onClick={() => remove.ask(u)}>Excluir</Button>

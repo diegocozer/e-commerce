@@ -82,7 +82,7 @@ export default function CustomerPricesPage() {
       align: 'right',
       render: (r) =>
         canManage && (
-          <span onClick={(e) => e.stopPropagation()}>
+          <span>
             <Button size="small" onClick={() => setEditing(r)}>Editar</Button>
             <Button size="small" color="error" onClick={() => remove.ask(r)}>Excluir</Button>
           </span>

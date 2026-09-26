@@ -55,7 +55,7 @@ export default function InventoryPage() {
       key: 'actions',
       header: 'Ações',
       render: (i) => (
-        <Stack direction="row" spacing={1} onClick={(e) => e.stopPropagation()}>
+        <Stack direction="row" spacing={1}>
           {can('inventory.move') && <Button size="small" onClick={() => open('entry', i)}>Entrada</Button>}
           {can('inventory.adjust') && <Button size="small" onClick={() => open('adjust', i)}>Ajustar</Button>}
           <Button size="small" onClick={() => open('history', i)}>Histórico</Button>

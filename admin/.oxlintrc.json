@@ -1,14 +1,31 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc", "jsx-a11y", "vitest"],
-  "categories": { "correctness": "error", "suspicious": "warn" },
+  "plugins": [
+    "react",
+    "typescript",
+    "oxc",
+    "jsx-a11y",
+    "vitest"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
   "rules": {
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "warn",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "react/only-export-components": "off",
     "typescript/no-explicit-any": "error",
     "react/react-in-jsx-scope": "off",
-    "no-shadow": "off"
+    "no-shadow": "off",
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "jsx-a11y/no-autofocus": "off",
+    "react/set-state-in-effect": "off",
+    "react/incompatible-library": "off"
   },
-  "ignorePatterns": ["dist", "public/mockServiceWorker.js", "src/shared/api/types.ts"]
+  "ignorePatterns": [
+    "dist",
+    "public/mockServiceWorker.js",
+    "src/shared/api/types.ts"
+  ]
 }

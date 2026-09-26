@@ -11,6 +11,22 @@ type Point = NonNullable<Dashboard['sales']>['revenue_series_30d'][number];
 const shortBRL = (cents: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 }).format(cents / 100);
 
+function renderTooltip({ active, payload }: { active?: boolean; payload?: readonly { payload?: unknown }[] }) {
+  const p = active && payload?.[0] ? (payload[0].payload as Point) : null;
+  if (!p) return null;
+  return (
+    <Card sx={{ p: 2 }}>
+      <Typography variant="caption">{formatDate(p.date).slice(0, 5)}</Typography>
+      <Typography variant="body2" className="num" sx={{ fontWeight: 600 }}>
+        {formatBRL(p.revenue_cents)}
+      </Typography>
+      <Typography variant="caption" className="num">
+        {p.orders_paid} {p.orders_paid === 1 ? 'pedido' : 'pedidos'}
+      </Typography>
+    </Card>
+  );
+}
+
 /** Colunas diárias, uma cor, eixo Y em R$, tooltip dd/mm + valor + pedidos; alternativa em tabela. */
 export function RevenueChart({ series }: { series: Point[] }) {
   const theme = useTheme();
@@ -52,24 +68,7 @@ export function RevenueChart({ series }: { series: Point[] }) {
                 <CartesianGrid vertical={false} stroke={theme.palette.divider} />
                 <XAxis dataKey="date" tickFormatter={(d: string) => formatDate(d).slice(0, 5)} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} interval="preserveStartEnd" minTickGap={16} />
                 <YAxis tickFormatter={shortBRL} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} width={72} />
-                <Tooltip
-                  cursor={{ fill: theme.palette.action.hover }}
-                  content={({ active, payload }) => {
-                    const p = active && payload?.[0] ? (payload[0].payload as Point) : null;
-                    if (!p) return null;
-                    return (
-                      <Card sx={{ p: 2 }}>
-                        <Typography variant="caption">{formatDate(p.date).slice(0, 5)}</Typography>
-                        <Typography variant="body2" className="num" sx={{ fontWeight: 600 }}>
-                          {formatBRL(p.revenue_cents)}
-                        </Typography>
-                        <Typography variant="caption" className="num">
-                          {p.orders_paid} {p.orders_paid === 1 ? 'pedido' : 'pedidos'}
-                        </Typography>
-                      </Card>
-                    );
-                  }}
-                />
+                <Tooltip cursor={{ fill: theme.palette.action.hover }} content={renderTooltip} />
                 <Bar dataKey="revenue_cents" fill={theme.palette.primary.main} radius={[3, 3, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>

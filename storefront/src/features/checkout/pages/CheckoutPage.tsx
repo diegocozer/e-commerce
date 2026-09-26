@@ -72,12 +72,13 @@ export default function CheckoutPage({ retryDelaysMs }: { retryDelaysMs?: number
   );
 
   useEffect(() => {
+    if (!customer) return; // aguarda /me antes de decidir o passo
     if (params.get('passo') !== current) {
       const next = new URLSearchParams(params);
       next.set('passo', current);
       setParams(next, { replace: true });
     }
-  }, [current, params, setParams]);
+  }, [current, params, setParams, customer]);
 
   const onSelectAddress = useCallback((uuid: string) => update((s) => (s.addressUuid === uuid ? {} : { addressUuid: uuid, quote: null, optionId: null })), [update]);
   const onShippingConflict = useCallback(

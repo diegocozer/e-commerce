@@ -137,7 +137,7 @@ export default function MethodsPage() {
       render: (m) => {
         const i = rows.indexOf(m);
         return (
-          <span onClick={(e) => e.stopPropagation()}>
+          <span>
             <IconButton aria-label={`Subir ${m.name}`} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUpIcon fontSize="small" /></IconButton>
             <IconButton aria-label={`Descer ${m.name}`} disabled={i === rows.length - 1} onClick={() => move(i, 1)}><ArrowDownIcon fontSize="small" /></IconButton>
           </span>
